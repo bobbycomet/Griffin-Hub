@@ -98,6 +98,8 @@ These three concepts are the backbone of how WinBridge decides what to install a
 
 A **profile** is a named bundle of "what kind of software is this, and what does it need." WinBridge ships ten:
 
+> **NOTE:** SteamDeck gaming will only work if you have your device ready to use AppImages with read/write capabilities.
+
 | Profile | Runner | What it's for |
 |---|---|---|
 | **Gaming** | Proton GE | Windows games. DXVK, VKD3D, Esync/Fsync, Media Foundation, Core Fonts, VC++ 2022. |
@@ -158,6 +160,8 @@ WinBridge has first-class support for the two big Nexus Mods managers, because "
 ---
 
 ## The Hardware Hub
+
+> **NOTE:** The UI looks different because this section controls the system; unlike the prior sections, this actually helps make your hardware work, so there are red buttons, colored cards, and so on to grab your attention to read what exactly this is changing and why it is changing. It is so you understand that changing anything here is important to know.
 
 This exists because the very first thing a lot of Windows switchers hit isn't a software compatibility problem; it's "my Wi-Fi card barely works," or "I have no idea what CPU governor I should be using," or "why won't my controller pair." The Hardware Hub has four tabs aimed squarely at that:
 
