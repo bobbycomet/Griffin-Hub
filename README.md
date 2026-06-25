@@ -1,586 +1,303 @@
 # WinBridge
 
-> **NOTE:** This is a preview of a planned release. It describes what WinBridge is intended to do and how it is designed to work. The project is currently in active development and not all described functionality may be fully implemented yet.
+> **NOTE:** This is a preview of a planned release. It describes what WinBridge is intended to do and how it is designed to work. The project is currently in active development, and not all described functionality may be fully implemented yet.
 
-WinBridge is a modern, profile-based Wine orchestration platform built with PyQt6. It provides a polished graphical interface and a full-featured command-line interface for installing, configuring, and launching Windows applications on Linux, with first-class support for gaming, modding tools, productivity software, creative suites, and legacy applications.
+**A Linux desktop app that runs your Windows software without making you think about Wine.**
 
-WinBridge is part of the **Griffin Linux Project**, a collection of tools designed to improve the Linux desktop experience for gamers and power users.
-
----
-
-## Features
-
-- **Profile-based installation:** Choose from built-in profiles for gaming, modding, launchers, office, creative, streaming, legacy, and development software. Each profile pre-selects the correct Wine runner, winetricks modules, environment variables, and post-install checks for its use case.
-- **Graphical user interface:** A dark-themed PyQt6 UI with animated transitions, a card-based profile browser, tabbed settings, an integrated log viewer, and real-time install progress.
-- **Full CLI:** Every GUI action is also available from the command line, making WinBridge scriptable and usable on headless or display-less systems.
-- **Multiple Wine runners:** Supports Proton GE, Wine GE, Wine Staging, Wine Stable, and Wine Development. Runners are detected from the system or can be managed through ProtonUp-Qt.
-- **Automatic module resolution:** Selects winetricks verbs, environment variable injections, and prefix architecture settings based on chosen modules. Detects and resolves conflicts (e.g., DXVK vs. WineD3D) and pulls in dependencies (e.g., DXVK requiring VC Runtime 2022) automatically.
-- **Wine prefix snapshots:** Create, restore, and manage named snapshots of any prefix, allowing safe experimentation without losing a working configuration.
-- **Mod manager support:** Dedicated profiles for Vortex and Mod Organizer 2, including automated download and setup of the MO2 Linux installer, NXM link registration, symlink/hardlink verification, and WebView2 validation.
-- **Plugin system:** Extend WinBridge with community or custom plugins. Plugins can add profiles, modules, runners, system checks, and distro-specific overrides. A two-tier trust model separates safe declarative plugins from fully trusted in-process plugins.
-- **Community plugin store:** Browse, install, update, and remove plugins from the community store directly from the GUI or CLI.
-- **System diagnostics:** Built-in system check panel verifies Wine, Vulkan, 32-bit support, GameMode, MangoHud, Mesa, PipeWire, Flatpak, and more.
-- **Subprocess safety:** All worker processes are guarded by a dual-mechanism watchdog timeout to prevent silent hangs.
-- **Tarfile safety:** Archive extraction uses `filter='data'` on Python 3.12 and path-traversal guards on older versions.
-- **SteamOS / Steam Deck support:** Auto-downloads winetricks on demand when running on an immutable root filesystem.
+WinBridge is for people switching from Windows to Linux who don't want to become a Wine expert just to keep using the apps and games they already have. You point it at an `.exe`, tell it roughly what kind of program it is, and it handles the rest: creating an isolated Wine environment, installing the right runtime libraries, picking a compatible Wine/Proton build, and giving you a normal-looking "app" you can launch, update, and remove like anything else.
 
 ---
 
-## Part of the Griffin Linux Project
+## Why this exists
 
-WinBridge is developed as part of a broader suite of Linux tools. It includes settings to control Process Sentry and Kernel Autotune V2 directly from the WinBridge interface, making it a central configuration point for the Griffin Linux toolchain.
+If you've moved from Windows to Linux, or you're thinking about it, there's a specific kind of friction that has nothing to do with Linux being "hard." It's that the software you already own and already know how to use doesn't run natively. Wine and Proton solve the *technical* problem (translating Windows API calls so the program runs at all), but they don't solve the *human* problem: knowing which Wine build to use, which runtime DLLs a given program needs, how to keep one game's weird dependency soup from breaking a totally unrelated app, or what to do when a launcher silently fails because WebView2 isn't installed.
 
-- **Process Sentry** - [https://github.com/bobbycomet/Process-Sentry](https://github.com/bobbycomet/Process-Sentry)
-- **Kernel Autotune V2** - [https://github.com/bobbycomet/kernel-autotune-V2](https://github.com/bobbycomet/kernel-autotune-V2)
-- **WinBridge Plugins (Community Store)** - [https://github.com/bobbycomet/WinBridge-Plugins](https://github.com/bobbycomet/WinBridge-Plugins)
+That gap is normally filled by experience — the kind you build up over years of fighting with `winecfg` and reading forum threads from 2014. WinBridge's whole reason for existing is to package that experience into software, so a first-week Linux user and a ten-year Wine veteran get roughly the same result.
 
----
+Concretely, WinBridge was built around a few convictions:
 
-## Requirements
+- **Isolation should be the default, not a power-user feature.** Every app gets its own Wine prefix. A broken game shouldn't be able to take your office suite down with it.
+- **You shouldn't have to know what DXVK or VKD3D are.** You should be able to pick "Gaming" and get the modules that make Windows games run well on Vulkan, without first learning what Vulkan translation even means.
+- **The thing that breaks on a Windows switcher's first day, drivers, controllers, Wi-Fi chips with notoriously bad Linux support should have a dedicated, guided fix, not a Stack Overflow scavenger hunt.** That's what the Hardware Hub is for.
+- **Power users shouldn't be boxed in.** Everything the GUI does, the CLI can do too, and everything the built-in profile system does, a plugin can extend.
 
-**Runtime:**
-- Python 3.10 or newer (Python 3.12 recommended for full tarfile safety support)
-- PyQt6
-- Wine (any variant: stable, staging, development, GE, or Proton GE)
-- winetricks (auto-downloaded to `~/.local/share/winbridge/bin/winetricks` if not found; required for module installation)
-
-**Optional but recommended:**
-- `bubblewrap` (`bwrap`): enables full sandbox isolation for community plugins. Falls back to a minimal subprocess environment if not present.
-- `vulkaninfo`: required for the Vulkan system check.
-- `gamemoded`: required for GameMode support.
-- MangoHud: required for the MangoHud overlay module.
-- `glxinfo` (from `mesa-utils`): required for the Mesa driver check.
-- PipeWire: required for the audio check.
-- Flatpak and ProtonUp-Qt: optional, used for runner management suggestions.
+WinBridge doesn't try to replace Lutris, Bottles, or PlayOnLinux; it overlaps with all of them in places. Its specific angle is being opinionated about *defaults* for someone who just switched platforms, while staying scriptable and extensible for everyone else.
 
 ---
 
-## Launching WinBridge
+## What WinBridge actually does
 
-**Graphical interface:**
+In one sentence: **WinBridge turns "install this Windows program" into a guided, profile-driven workflow on top of Wine and Proton**, instead of a sequence of manual `winecfg`/`winetricks` steps you have to already know.
 
-```bash
-python3 winbridge.py
+When you install an app through WinBridge, here's what happens under the hood:
+
+1. **A profile is chosen** (by you, or WinBridge's best guess), e.g., *Gaming*, *Adobe/Creative*,*Office/Productivity*. Each profile bundles a sensible Wine/Proton build and a starting set of compatibility modules.
+2. **A fresh, isolated Wine prefix is created** under `~/.local/share/winbridge/prefixes/<app-id>/`. Nothing is shared with other apps by default.
+3. **Modules are installed via winetricks** — DXVK, VKD3D, .NET, VC++ runtimes, fonts, WebView2, NTLM auth, whatever the profile calls for, with conflict resolution (e.g., WineD3D and DXVK can't both be active; WinBridge resolves that automatically rather than silently breaking).
+4. **The installer runs inside that prefix**, same as it would on real Windows.
+5. **Profile-specific post-install steps run**, where applicable — registering an NXM URL handler for Vortex, verifying WebView2 actually took for a launcher, and smoke-testing that the binary launches at all.
+6. **The app shows up in My Apps**, launchable with one click, with its own environment variables, optional launch wrapper (`gamemoderun`, `gamescope`, etc.), and snapshot history.
+
+Everything past step 1 can also be done from the terminal.
+
+---
+
+## Quick start
+
+**GUI:**
+1. Open WinBridge → **Install App**.
+2. Point it at your `.exe`/`.msi`.
+3. Pick a profile (or let WinBridge suggest one).
+4. Wait for the prefix to set up and the installer to run.
+5. Find it under **My Apps** from then on.
+
+**CLI:**
 ```
-
-**Command-line (no display required):**
-
-```bash
-python3 winbridge.py --help
+winbridge install ~/Downloads/setup.exe --profile gaming --name "My Game"
+winbridge list
+winbridge launch "My Game"
 ```
 
 ---
 
-## Profiles
+## Installing
 
-Profiles are the central concept in WinBridge. Each profile bundles a recommended Wine runner, a set of modules, environment variable overrides, lifecycle hooks, and post-install diagnostic checks tailored for a category of Windows software.
+On first GUI launch, WinBridge will ask for admin authentication once to install a small system helper; this is what lets later features, such as CPU governor changes and driver installs, ask for permission cleanly instead of every single click prompting you separately. You can decline; everything still works, it just falls back to per-action prompts.
 
-### Built-in Profiles
-
-| Profile | Runner | Use Case |
-|---|---|---|
-| Gaming | Proton GE | Windows games with DXVK, VKD3D, Esync, Fsync, GameMode |
-| Launcher | Wine GE | Game launchers: Battle.net, Epic Games, Riot Client |
-| Office / Productivity | Wine Stable | Business software, accounting tools, corporate apps |
-| Adobe / Creative | Wine Staging | Photoshop, Illustrator, Premiere, and similar tools |
-| Streaming / Content | Wine Staging | Streamlabs, chat bots, overlay software |
-| Legacy Software | Wine Stable | Windows XP/7 era software, 32-bit apps, old games |
-| Dev Tools | Wine Staging | Visual Studio, Windows SDKs, .NET toolchains |
-| Modding Tools | Wine GE | Mod managers, map editors, save editors |
-| Vortex | Wine GE | Nexus Mods Vortex with NXM links and collections |
-| Mod Organizer 2 | Wine GE | MO2 with NXM links, virtual filesystem, game detection |
-
-### Profile Metadata Fields (v1.1 and later)
-
-Each profile supports the following optional fields beyond the core `id`, `name`, `runner`, and `modules`:
-
-- `version`: semver string for the profile definition itself.
-- `profile_type`: one of `app`, `mod_manager`, `launcher`, `tool`, or `legacy`. Used for UI grouping and install logic.
-- `capabilities`: list of feature strings such as `nxm`, `mod_deploy`, `virtual_fs`, `game_detection`, `collections`, `overlay`, and `modding_tool`.
-- `setup_steps`: ordered list of install phase names executed by the install worker.
-- `post_install_steps`: phases run after the main installer completes.
-- `post_install_checks`: profile-specific diagnostic checks with fix hints, run after install.
-- `external_resources`: declarative list of files the installer must fetch, replacing hardcoded URLs in worker code.
-
-### Profile Dependency and Conflict Fields (v1.6 and later)
-
-- `depends_on`: list of profile IDs that must be installed before this profile.
-- `conflicts_with`: list of profile IDs that cannot coexist in the same prefix.
-- `permission_hints`: human-readable list of access requirements shown to the user before install, such as `"Downloads folder"`, `"network access"`, or `"NXM URL scheme"`.
+**Requirements on the host system**, regardless of install method:
+- A 64-bit Linux distribution with glibc (the AppImage bundles its own Python + PyQt6, but still relies on the host's graphics stack, Wine packages, and system libraries it shells out to).
+- [`wine`](https://www.winehq.org/) and [`winetricks`](https://github.com/Winetricks/winetricks) installed, or the willingness to let WinBridge's System Check page tell you what's missing.
+- A Vulkan driver if you want DXVK/VKD3D-based profiles (Gaming, Steam Deck Gaming) to actually perform well; WinBridge will tell you if it can't find one.
+- `pkexec`/PolicyKit for anything that needs elevated privileges (driver installs, CPU governor changes, system tuning). Present by default on virtually every desktop Linux distro.
 
 ---
 
-## Modules
+## The app, tab by tab
 
-Modules represent optional Wine components, runtimes, overlays, and environment tweaks. When you install a profile, WinBridge resolves the selected modules into winetricks verbs and environment variable injections, applies conflict rules, and pulls in declared dependencies.
+WinBridge's sidebar has nine sections:
 
-### Module Categories
-
-**Graphics:** DXVK, VKD3D, WineD3D, Legacy DirectX
-
-**Performance:** Esync, Fsync, GameMode, MangoHud
-
-**Runtime:** VC Runtime 2022, VC Runtime Full, .NET 4.8, .NET Stack, .NET Full Stack, .NET Heavy Stack, .NET + VC Runtime
-
-**Fonts:** Core Fonts, Windows Fonts
-
-**Media:** Media Foundation, Quartz/DirectShow
-
-**Compatibility:** NTLM Auth, WebView2, DPI Scaling, 32-bit Libraries
-
-**Creative:** Color Profile Fixes, GPU Acceleration, GDI Tweaks, Old API Compat
-
-**Streaming:** Hardware Encoding, Audio Routing, Low-Latency Timers
-
-**Legacy:** Old VC Runtime, Safe DLL Overrides
-
-**Development:** PowerShell, Windows SDK, Debugging Support, Path Handling
-
-**Modding:** Mixed DirectX, File Permission Fixes, Explorer Integration
-
-**Launchers:** Edge/IE Components
-
-**Modding Tools:** Vortex Runtimes
-
-### Module Conflict and Dependency Rules
-
-WinBridge enforces the following conflict rules at install time and as live warnings in the module selection UI:
-
-- DXVK conflicts with WineD3D.
-- WineD3D conflicts with DXVK and VKD3D.
-- VKD3D conflicts with WineD3D.
-- 32-bit Libraries conflicts with .NET Heavy Stack and .NET Full Stack.
-
-The following dependency rules cause automatic module inclusion:
-
-- DXVK requires VC Runtime 2022.
-- VKD3D requires VC Runtime 2022.
-- .NET Heavy Stack requires .NET Full Stack.
-- .NET Full Stack requires .NET Stack.
-- .NET Stack requires .NET 4.8.
-- WebView2 requires VC Runtime 2022.
-
-Conflict resolution is iterative and fully transitive: if module A conflicts with B and B conflicts with C, all three levels are resolved in a single pass. The first-listed module wins on conflict. User-requested modules are never displaced by their own auto-added dependencies.
-
----
-
-## Runners
-
-WinBridge supports the following Wine runners:
-
-| Runner ID | Name | Type | Notes |
-|---|---|---|---|
-| `proton-ge` | Proton GE | Gaming/Recommended | Recommended for most games |
-| `wine-ge` | Wine GE | General/Recommended | Recommended for launchers and modding |
-| `wine-staging` | Wine Staging | General | Good for creative and streaming software |
-| `wine-stable` | Wine Stable | Stable/Legacy | Best compatibility for legacy apps |
-| `wine-devel` | Wine Development | Testing | Latest features, less stable |
-
-System runners are detected from `PATH`. Custom or downloaded runners (such as those managed by ProtonUp-Qt) are supported as well. Runner IDs use lowercase-with-hyphens internally; display names are only used in the UI.
-
----
-
-## Wine Prefixes and Snapshots
-
-Each installed profile gets its own isolated Wine prefix under `~/.local/share/winbridge/prefixes/`. Prefixes are never shared between profiles by default.
-
-WinBridge supports named snapshots of any prefix. You can:
-
-- Create a snapshot before making risky changes.
-- Restore a prefix to any previous snapshot.
-- Delete snapshots you no longer need.
-- List all snapshots for a prefix.
-
-Snapshots are stored as compressed tarballs. Extraction uses `safe_tarextract()`, which applies `filter='data'` on Python 3.12 and path-traversal validation on older Pythons.
-
----
-
-## NXM Link Handling
-
-Profiles with the `nxm` capability (currently Vortex and Mod Organizer 2) can register an `nxm://` URI handler on your Linux desktop. This allows clicking mod download links on Nexus Mods in a browser and having them sent directly to the correct mod manager running under Wine.
-
-Registration writes:
-- A `.desktop` file to `~/.local/share/applications/winbridge-nxm.desktop`
-- A handler shell script to `~/.local/share/winbridge/nxm-handler.sh`
-
-The handler can be re-registered or removed from the profile's post-install options.
-
----
-
-## Plugin System
-
-WinBridge has a first-class plugin system. Plugins are single `.py` files placed in `~/.local/share/winbridge/plugins/`. They are loaded automatically at startup.
-
-### What Plugins Can Do
-
-A plugin may define any combination of the following module-level variables:
-
-- `PLUGIN_PROFILES`: list of profile dicts following the same schema as built-in profiles. Appears as selectable profiles in the Install App screen.
-- `PLUGIN_MODULES`: dict mapping category names to lists of module dicts.
-- `PLUGIN_RUNNERS`: list of runner dicts.
-- `PLUGIN_CHECKS`: list of system check dicts.
-- `PLUGIN_EXTENDS`: dict mapping existing profile IDs to patch dicts. Extends a built-in or other plugin's profile rather than replacing it. See [Profile Extension API](#profile-extension-api).
-- `PLUGIN_METADATA`: dict with `version`, `api_version`, `author`, `description`, and `trust_level`.
-- `PLUGIN_KIND`: string indicating the plugin type: `"profile"`, `"app"`, `"distro"`, `"check"`, or `"runner"`.
-- `PLUGIN_DISTRO_OVERRIDES`: used by distro plugins to override package manager commands, system check fix commands, and DE/compositor detection.
-- `register(registry)`: called at startup for trusted plugins only. The registry exposes `.add_profile()`, `.extend_profile()`, `.add_module_category()`, `.add_runner()`, and `.add_check()`.
-
-### AST Safety Scanner
-
-Before any plugin is executed, WinBridge runs an AST-based safety scanner that blocks plugins containing:
-
-- `os.system()` calls
-- `eval()` or `exec()` calls
-- `subprocess` calls with `shell=True`
-- `shutil.rmtree()` calls
-- Dangerous shell command literals such as `rm -rf`
-
-This scanner runs regardless of trust level. It is a first line of defense, not a complete sandbox.
-
-> **Warning:** Plugins execute arbitrary Python code. Only install plugins you trust. The AST scanner catches common dangerous patterns but cannot catch all possible harmful code.
-
----
-
-## Plugin Trust Tiers
-
-WinBridge uses a two-tier trust model for plugins, declared in `PLUGIN_METADATA["trust_level"]`.
-
-### Safe (default)
-
-- Declarative-only: `PLUGIN_PROFILES`, `PLUGIN_MODULES`, `PLUGIN_RUNNERS`, `PLUGIN_CHECKS`.
-- No `register()` hook.
-- No `env_overrides` in `PLUGIN_EXTENDS`.
-- All community store plugins are forced to this level.
-- Any plugin without a `.trusted` sidecar file is capped at this level.
-
-### Trusted
-
-- Full API access: `register()` hook, `env_overrides` injection, and full `PLUGIN_EXTENDS`.
-- Requires a `.trusted` sidecar file placed next to the plugin `.py` file.
-- The `.trusted` file **must be created manually by the user.** It cannot be self-granted by the plugin.
-- `trust_level = "trusted"` in `PLUGIN_METADATA` is only respected when the `.trusted` sidecar is present.
-
-### Mapping to Execution Contexts
-
-| Context | Trust Level |
+| Page | What it's for |
 |---|---|
-| Community store / sandboxed | Forced to `safe` |
-| In-process, no `.trusted` sidecar | Capped at `safe` |
-| In-process with `.trusted` sidecar | `trusted` respected |
+| **Dashboard** | At-a-glance stats, installed apps, runners, quick links to the other pages. |
+| **Profiles** | Browse every available profile (built-in + plugin-added), see what runner and modules each one uses. |
+| **Install App** | The main install wizard; pick an `.exe`, pick a profile, go. |
+| **My Apps** | Everything you've installed: launch, edit environment variables/launch wrapper, manage snapshots, uninstall. |
+| **Runners** | Install/remove Wine and Proton GE builds. WinBridge can also detect runners you already installed via Steam or ProtonUp-Qt without re-downloading them. |
+| **System Check** | Verifies Wine, Winetricks, Vulkan, GameMode, MangoHud, Mesa, PipeWire, and 32-bit support are present, with fix hints for anything missing. |
+| **System Tune** | The *GameTune Hub* — Steam launch wrapper management, ProcessSentry, kernel autotune, live tuning, setup. See its own section below. |
+| **Hardware Hub** | Guided fixes for CPU governor, GPU drivers, controller drivers, and notoriously bad-on-Linux Wi-Fi chipsets. See its own section below. |
+| **Settings** | General preferences, custom data paths, plugin management, security (sandbox toggle), and About. |
 
 ---
 
-## Profile Extension API
+## Profiles, modules, and runners
 
-Available in Plugin API v2 and later. Plugins can extend existing profiles without replacing them by declaring `PLUGIN_EXTENDS`.
+These three concepts are the backbone of how WinBridge decides what to install and how to run it.
 
-```python
-PLUGIN_EXTENDS = {
-    "steam_deck": {
-        # All fields are optional; omitted fields leave the profile unchanged.
-        "modules":             ["ExtraModule"],    # dedupe-append
-        "post_install_steps":  ["extra_step"],     # dedupe-append
-        "post_install_checks": [                   # dedupe by check id
-            {"id": "my_check", "name": "...", "cmd": [...], "fix_hint": "..."}
-        ],
-        "env_overrides": {                         # trusted plugins only
-            "MY_VAR": "value"
-        },
-        "performance_mode": True,                  # OR'd with existing value
-    }
-}
-```
+### Profiles
 
-### Merge Rules
+A **profile** is a named bundle of "what kind of software is this, and what does it need." WinBridge ships ten:
 
-These rules are deterministic and designed to avoid surprises:
-
-- `modules`: deduplicated union; plugin entries are appended after the base profile's entries.
-- `post_install_steps`: deduplicated union; plugin entries are appended after the base.
-- `post_install_checks`: deduplicated by the `id` field; plugin entries are appended.
-- `env_overrides`: dict merge; plugin keys win on collision. Restricted to trusted plugins.
-- `performance_mode`: boolean OR; the result is `True` if either the base profile or the patch sets it.
-- Any unrecognized key in the patch dict is warned about and skipped, ensuring forward compatibility.
-
----
-
-## Sandbox System
-
-WinBridge uses three distinct execution contexts for running code.
-
-### SANDBOXED
-
-Used for community plugins and store downloads. Plugins are evaluated via bubblewrap (`bwrap`) if installed, or via a minimal subprocess with `-S` (no site-packages) and a stripped environment if bubblewrap is not available. No home directory access. No network access. Output is declarative-only JSON. The `register()` hook is never called in this context. Controlled by the `plugin_sandbox` setting.
-
-### CONTROLLED
-
-Used for Wine/winetricks invocations, CLI system checks, and post-install checks. Runs as a plain subprocess restricted to an allowlist of permitted executables (`ALLOWED_CHECK_EXECUTABLES`).
-
-### NATIVE
-
-Used for prefix creation, mod symlinking, NXM handler registration, and snapshots. Has full user filesystem access, which is intentional Wine behavior. The `plugin_sandbox` setting has **no effect** on NATIVE-context paths.
-
-### Notes
-
-- If `plugin_sandbox` is enabled but `bwrap` is not installed, WinBridge will warn you and fall back to the minimal subprocess approach.
-- The `.trusted` sidecar bypasses the sandbox for in-process plugin loading, granting full registry access.
-
----
-
-## Community Plugin Store
-
-WinBridge includes a built-in community plugin store backed by the [WinBridge-Plugins](https://github.com/bobbycomet/WinBridge-Plugins) repository, served via the jsDelivr CDN for fast, globally cached downloads.
-
-The store index is cached locally for one hour (`STORE_CACHE_TTL = 3600` seconds). You can force a cache refresh from the GUI or CLI.
-
-### Store CLI Commands
-
-```bash
-# Search the store
-python3 winbridge.py store search
-python3 winbridge.py store search --query modding
-python3 winbridge.py store search --capability nxm
-python3 winbridge.py store search --verified
-
-# Refresh the store cache
-python3 winbridge.py store refresh
-
-# Install a plugin
-python3 winbridge.py plugin install <plugin-id>
-
-# Update a plugin
-python3 winbridge.py plugin update <plugin-id>
-
-# Remove a plugin
-python3 winbridge.py plugin remove <plugin-id>
-
-# Show plugin info (remote and local)
-python3 winbridge.py plugin info <plugin-id>
-
-# List installed plugins
-python3 winbridge.py plugin list
-
-# Verify installed plugins
-python3 winbridge.py plugin verify
-
-# Reload all plugins without restarting
-python3 winbridge.py plugin reload
-```
-
----
-
-## System Integration
-
-WinBridge provides a `SystemIntegration` helper for opening files and URLs that respects the user's preferred file manager and desktop environment. The resolution order is:
-
-1. `settings["file_manager"]`: user override.
-2. DE-specific fallbacks: Nautilus (GNOME), Dolphin (KDE), Thunar (XFCE), and others.
-3. `xdg-open`: universal fallback.
-
-Use the "Open Log Folder" button under Settings to open the log directory directly in your file manager.
-
----
-
-## Structured Logging
-
-All WinBridge events are logged to `~/.local/share/winbridge/logs/winbridge.log`.
-
-Worker output lines are prefixed with `[STEP]`, `[OK]`, or `[FAIL]` so the in-app log panel and failure dialogs can parse and display them consistently. Fatal install failures emit a user-facing bullet-point summary via `finished(False, summary)`.
-
-You can open the log folder directly from: **Settings** > **Paths** > **Open Log Folder**
-
----
-
-## Command-Line Interface
-
-WinBridge has a full CLI that does not require a display. All commands follow the pattern:
-
-```
-python3 winbridge.py <command> [options]
-```
-
-### Core Commands
-
-```bash
-# Show help
-python3 winbridge.py --help
-
-# Install a Windows application using a profile
-python3 winbridge.py install setup.exe --profile gaming
-python3 winbridge.py install setup.exe --profile mo2
-
-# List all installed apps
-python3 winbridge.py list
-
-# Run the system compatibility check
-python3 winbridge.py syscheck
-
-# Check whether specific modules are available
-python3 winbridge.py check-modules DXVK WineD3D
-
-# Launch an installed app
-python3 winbridge.py launch <app-id>
-
-# Remove an installed app
-python3 winbridge.py remove <app-id>
-```
-
-### Snapshot Commands
-
-```bash
-python3 winbridge.py snapshot create <prefix-id> <snapshot-name>
-python3 winbridge.py snapshot restore <prefix-id> <snapshot-name>
-python3 winbridge.py snapshot list <prefix-id>
-python3 winbridge.py snapshot delete <prefix-id> <snapshot-name>
-```
-
-### Settings Commands
-
-```bash
-# List all settings
-python3 winbridge.py settings list
-
-# Get a setting value
-python3 winbridge.py settings get plugin_sandbox
-
-# Set a setting value
-python3 winbridge.py settings set plugin_sandbox true
-python3 winbridge.py settings set file_manager dolphin
-```
-
-### Plugin Commands
-
-```bash
-python3 winbridge.py plugin list
-python3 winbridge.py plugin install <id>
-python3 winbridge.py plugin update <id>
-python3 winbridge.py plugin remove <id>
-python3 winbridge.py plugin info <id>
-python3 winbridge.py plugin verify
-python3 winbridge.py plugin reload
-```
-
-### Store Commands
-
-```bash
-python3 winbridge.py store search
-python3 winbridge.py store search --query <term>
-python3 winbridge.py store search --capability <cap>
-python3 winbridge.py store refresh
-```
-
----
-
-## Settings
-
-WinBridge stores its settings in `~/.local/share/winbridge/settings.json`. Key settings include:
-
-| Key | Type | Description |
+| Profile | Runner | What it's for |
 |---|---|---|
-| `plugin_sandbox` | bool | Enable bubblewrap/subprocess sandboxing for community plugins |
-| `file_manager` | string | Override the default file manager used to open folders |
-| `store_url` | string | Override the community store index URL |
-| `wine_debug` | string | `WINEDEBUG` value passed to Wine processes |
-| `enable_esync` | bool | Global Esync toggle (per-profile settings take precedence) |
-| `enable_fsync` | bool | Global Fsync toggle |
+| **Gaming** | Proton GE | Windows games. DXVK, VKD3D, Esync/Fsync, Media Foundation, Core Fonts, VC++ 2022. |
+| **Launcher** | Wine GE | Battle.net, Epic Games, Riot Client, and similar; heavy on .NET, WebView2, and auth components. |
+| **Office/Productivity** | Wine Stable | Business software, accounting tools, corporate apps. |
+| **Adobe/Creative** | Wine Staging | Photoshop, Illustrator, Premiere color profile fixes, old-API compatibility. |
+| **Streaming/Content** | Wine Staging | Streamlabs, chatbots, overlay tools, audio routing. |
+| **Legacy Software** | Wine Stable | XP/7-era software, old games, 32-bit-only tools. |
+| **Dev Tools** | Wine Staging | Visual Studio, Windows SDKs, enterprise dev tooling. |
+| **Modding Tools** | Wine GE | General-purpose mod managers, map editors, save editors. |
+| **Vortex** | Wine GE | Nexus Mods Vortex specifically — NXM link handling, collections, mod deployment. |
+| **Mod Organizer 2** | Wine GE | MO2 specifically — downloads and runs the official Linux MO2 installer for you. |
+| **Steam Deck Gaming** | Proton GE | GOG Galaxy, EA App, Ubisoft Connect, Xbox PC App, and other launchers Steam doesn't manage. *Adaptive* — probes your GPU vendor, Mesa version, and whether Gamescope is active, then only applies the environment variables that are safe for your actual hardware. |
 
-You can view and modify all settings from the GUI (Settings tab) or via `winbridge settings list` and `winbridge settings set`.
+Every profile that needs more than "install some modules and run the .exe" (currently Vortex, MO2, and Steam Deck Gaming) declares structured **lifecycle hooks** — `setup_steps`, `post_install_steps`, and `post_install_checks` — so the install worker knows exactly what extra work to do and what to verify afterward. Plugins can add entirely new profiles with the same structure.
 
----
+### Modules
 
-## Data Locations
+A **module** is one compatibility component, a Winetricks verb, more or less. They're grouped by category:
 
-| Path | Contents |
-|---|---|
-| `~/.local/share/winbridge/` | Root data directory |
-| `~/.local/share/winbridge/prefixes/` | Wine prefixes, one directory per installed app |
-| `~/.local/share/winbridge/runners/` | Downloaded runners |
-| `~/.local/share/winbridge/cache/` | Store index cache and other cached downloads |
-| `~/.local/share/winbridge/plugins/` | Installed plugins (`.py` files and optional `.trusted` sidecars) |
-| `~/.local/share/winbridge/logs/winbridge.log` | Application log |
-| `~/.local/share/winbridge/apps.json` | Installed app records |
-| `~/.local/share/winbridge/runners.json` | Runner state |
-| `~/.local/share/winbridge/settings.json` | User settings |
-| `~/.local/share/winbridge/bin/winetricks` | Auto-downloaded winetricks (used on SteamOS and other immutable systems) |
-| `~/.local/share/applications/winbridge-nxm.desktop` | NXM link handler desktop entry |
-| `~/.local/share/winbridge/nxm-handler.sh` | NXM handler script |
+- **Graphics:** DXVK, VKD3D, WineD3D (conflicts with DXVK), Legacy DirectX
+- **Performance:** Esync, Fsync, GameMode, MangoHud
+- **Runtime:** VC Runtime 2022, VC Runtime Full, .NET 4.8, .NET Full Stack
+- **Fonts:** Core Fonts, Windows Fonts
+- **Media:** Media Foundation, Quartz/DirectShow
+- **Compatibility:** NTLM Auth, WebView2, DPI Scaling, 32-bit Libraries
 
----
+WinBridge auto-resolves conflicts and missing dependencies when you change a module list, e.g., picking DXVK alongside WineD3D will warn you and drop WineD3D, since the two can't coexist. You can check this yourself without installing anything:
 
-## System Checks
+```
+winbridge check-modules DXVK WineD3D
+```
 
-WinBridge includes a built-in system diagnostics panel. The following checks are performed:
+### Runners
 
-| Check | Category | Required |
-|---|---|---|
-| Wine | Core | Yes |
-| Winetricks | Core | Yes |
-| 32-bit Support | Core | Yes |
-| Vulkan Loader | Graphics | Yes (for DXVK/VKD3D) |
-| Mesa Drivers | Graphics | Yes |
-| GameMode | Performance | Optional |
-| MangoHud | Performance | Optional |
-| PipeWire Audio | Audio | Optional |
-| ProtonUp-Qt | Runners | Optional |
-| Flatpak | Core | Optional |
+A **runner** is the actual Wine or Proton build used to execute everything. WinBridge ships definitions for:
 
-Profile-specific post-install checks (such as the Vortex WebView2 check and filesystem symlink test) are run automatically after install and are also available on demand from the diagnostics panel.
+- **Proton GE** (`GloriousEggroll/proton-ge-custom`) — gaming-focused, downloaded on demand
+- **Wine GE** (`GloriousEggroll/wine-ge-custom`) — for launchers and modding tools, downloaded on demand
+- **Wine Staging** — uses your distro's system package if present
+- **Wine Stable** — uses your distro's system `wine` package
+- **Wine Development** — bleeding-edge, uses your distro's `wine-devel`/`wine-development` package
+
+Downloadable runners (Proton GE, Wine GE) are fetched straight from their GitHub releases; system runners just shell out to whatever your distro already has installed. WinBridge will also find Proton/Wine GE builds you already downloaded through Steam or ProtonUp-Qt instead of duplicating them.
 
 ---
 
-## Security
+## Modding tools (Vortex/Mod Organizer 2/NXM links)
 
-WinBridge takes several measures to reduce risk when running Windows software and third-party plugins:
+> **NOTE:** Modding support is in BETA. While the tool is in testing, I will be making sure this works as best as possible. Too long has Linux been ignored.
 
-- **AST scanner:** Blocks plugins containing dangerous Python patterns before execution.
-- **Trust tier system:** Limits what community and untrusted plugins can do. `env_overrides` and the `register()` hook are restricted to manually trusted plugins.
-- **Sandbox system:** Community plugins run in a bubblewrap container (if available) with no home directory or network access.
-- **Subprocess allowlist:** CONTROLLED-context subprocesses are restricted to a whitelist of permitted executables.
-- **Tarfile safety:** Archive extraction is protected against path traversal attacks.
-- **Watchdog timeouts:** All worker subprocesses have a dual-mechanism timeout (watchdog thread and per-line deadline check) to prevent silent hangs.
-- **No self-granting of trust:** The `.trusted` sidecar file must be created by the user manually. Plugins cannot grant themselves elevated trust.
+WinBridge has first-class support for the two big Nexus Mods managers, because "I just want to click Download on Nexus and have it land in my mod manager" is a real, common, and previously painful Linux workflow.
 
-Wine prefixes run with the current user's permissions. WinBridge never requires or requests elevated privileges. Windows software running under Wine has access to whatever your user account has access to; exercise the same caution you would with any application.
+- **Vortex** and **Mod Organizer 2** are both selectable profiles with dedicated setup and post-install steps (WebView2 verification, filesystem symlink-support checks, NXM handler registration, launch smoke tests).
+- Clicking **"Download with Mod Manager"** on Nexus Mods fires an `nxm://` URL at your browser. WinBridge registers itself as the system handler for that URL scheme via a small shell script + `.desktop` file (`xdg-mime`), so the link gets routed to `winbridge handle-nxm <url>`, which looks up which installed app declared `nxm_handler: true`, then launches Vortex or MO2 with that URL as an argument, exactly like it would on Windows.
+- This handler script is written in a way that's deliberately AppImage-aware: it points at the *AppImage file itself* (via `$APPIMAGE`), not at a temporary internal mount path, so it keeps working after you close and reopen the app, and across reboots.
 
 ---
 
-## Troubleshooting
+## The Hardware Hub
 
-**WinBridge fails to start with a PyQt6 import error:**
-Install PyQt6 with `pip install PyQt6`. On some distributions, `python3-pyqt6` is available as a system package.
+This exists because the very first thing a lot of Windows switchers hit isn't a software compatibility problem; it's "my Wi-Fi card barely works," or "I have no idea what CPU governor I should be using," or "why won't my controller pair." The Hardware Hub has four tabs aimed squarely at that:
 
-**Winetricks module installation fails:**
-WinBridge will attempt to auto-download winetricks if it is not found in `PATH`. If the download fails, install winetricks manually from your package manager or from [https://github.com/Winetricks/winetricks](https://github.com/Winetricks/winetricks).
+- **CPU** — shows your current CPU governor and lets you switch between Power Save, Conservative, Balanced, Balanced (Legacy), Manual, and Performance, each with a plain-language explanation of the tradeoff.
+- **GPU** — detects your GPU and walks you through the right driver path for it, including a "Hardware Swap" safety net if you're switching GPU vendors (e.g., NVIDIA → AMD) and need to cleanly back out of vendor-specific drivers first.
+- **Controllers** — detects connected controllers and recommends the right driver (`xone` vs `xpad-noone` vs community forks), explaining what each one actually does instead of just listing package names.
+- **WiFi** — Realtek and Broadcom Wi-Fi/Bluetooth chips have a long, well-known history of being badly supported by in-kernel Linux drivers. This tab detects your chipset and offers DKMS-based fixes specific to known problem chips (RTL8821CE, RTL8822BE, RTL8852AE, RTL8723DE, and others).
 
-**`plugin_sandbox` enabled but bubblewrap not found:**
-WinBridge will warn you and fall back to a minimal subprocess sandbox. Install bubblewrap for full isolation: `sudo apt install bubblewrap` (or your distribution's equivalent).
-
-**NXM links not being captured by the browser:**
-Re-run the NXM handler registration from the Vortex or MO2 profile's post-install actions. Make sure `~/.local/share/applications/winbridge-nxm.desktop` exists and that your browser is configured to handle `nxm://` links via the desktop file.
-
-**Wine process hangs during install:**
-The install worker has a watchdog timeout. If a process is silently stalled, it will be killed once the wall-clock deadline is reached. Check the log file at `~/.local/share/winbridge/logs/winbridge.log` for `[FAIL]` prefixed lines and the failure summary.
-
-**A plugin is blocked by the AST scanner:**
-The scanner detected a dangerous code pattern in the plugin. Review the plugin source before adding an exception. If you trust the plugin author and understand the flagged code, you can load the plugin as a trusted plugin by creating a `.trusted` sidecar file.
-
-**Unknown setting key error in CLI:**
-Run `python3 winbridge.py settings list` to see all valid keys and their current values.
+Every privileged action here (writing to `scaling_governor`, installing driver packages, reloading udev rules) goes through `pkexec`, and once you've installed the system helper on first launch, through the scoped `org.winbridge.helper` PolicyKit action rather than a blanket root prompt. See the next section.
 
 ---
 
-## Contributing
+## System Tune (GameTune Hub)
 
-WinBridge is in active development and contributions are welcome. When submitting plugins or profiles to the community store, please refer to the plugin schema documented in the [WinBridge Plugins](https://github.com/bobbycomet/WinBridge-Plugins) repository.
+A separate, broader system-tuning surface from the Hardware Hub, organized into six tabs:
 
-Plugin naming conventions:
-- Module IDs: lowercase, e.g., `dxvk`, `wined3d`, `vcrun2022`
-- Profile IDs: lowercase-with-hyphens, e.g., `wine-ge`, `mod-organizer2`
-- Display names are only used in UI code; core logic always uses IDs
-
-When writing plugins, declare `PLUGIN_METADATA` with `api_version`, `version`, `author`, `description`, and `trust_level`. This information is displayed in the store and helps users make informed decisions.
+- **Overview** — current tuning state at a glance.
+- **Steam Wrappers** — manages a combined launch wrapper script for Steam games (gaming-specific environment setup applied automatically at launch).
+- **ProcessSentry** — a watchdog service/config for process-level monitoring.
+- **Kernel Autotune** — a systemd-managed service + config for kernel-level performance tuning, with a persistent on/off "kill switch" (`/etc/no-auto-throttle`) you can flip without uninstalling anything.
+- **Live Tuning** — apply tuning changes to the current session immediately.
+- **Setup** — installs the udev rules, PolicyKit rule, and systemd units this whole subsystem depends on.
 
 ---
+
+## Privileged operations & the PolicyKit helper
+
+Several things in WinBridge legitimately need root: writing CPU governor files under `/sys`, installing driver packages, reloading udev rules, and managing the systemd services behind Kernel Autotune. Rather than asking you to type your password into a generic terminal prompt for every single one of these, WinBridge installs a small, deliberately narrow **PolicyKit helper**.
+
+**What "scoped" means here, concretely:** the helper does *not* accept "run this arbitrary command as root." It exposes a fixed menu of named operations — `set-cpu-governor`, `write-file` (to one of a handful of known config paths, never an arbitrary path), `install-packages`/`remove-packages` (package names validated against a strict pattern before anything runs), `systemctl` (restricted to a fixed list of units and actions), `usermod-add-group` (restricted to a fixed list of groups), and a few other narrowly-defined operations. Anything outside that menu, or any argument that doesn't match what's expected, is rejected *before* it ever reaches a subprocess call — there is no shell string interpolation anywhere in the helper.
+
+This is installed automatically and silently on your first **GUI** launch (CLI commands like `winbridge plugin list` never trigger it, since there's no reason a read-only command should ask for your password). It's a one-time, idempotent step — WinBridge hashes the bundled helper against what's already on your system and only re-prompts if something actually changed (e.g. after an update). Declining the prompt doesn't break anything; the app falls back to the same individual `pkexec` prompts it would have used otherwise.
+
+If you want to inspect exactly what the helper can and can't do, it's a plain, readable Python script — see `packaging/winbridge-helper` in this repo.
+
+---
+
+## Plugins, in short
+
+WinBridge's profile/module/runner system is fully extensible without touching the app's source. Plugins can add new profiles, new modules, new runners, new system checks, override distro-specific package manager commands, and even *extend* existing built-in profiles (e.g., adding a post-install step to the Gaming profile) through a deterministic, conflict-aware merge system.
+
+This README only covers the surface; the full plugin authoring guide — manifest format, the trust/sandbox model, the `PLUGIN_EXTENDS` merge rules, how this all interacts with the AppImage packaging, and a complete worked example — lives in **[PLUGINS.md](PLUGINS.md)**.
+
+Quick taste of the CLI surface:
+
+```
+winbridge store search vortex          # search the community plugin store
+winbridge plugin install my-plugin     # install one
+winbridge plugin list                  # see what's installed
+winbridge plugin resolve steam_deck    # debug what plugins changed about a profile
+```
+
+---
+
+## The command line
+
+Everything below works identically whether you're running the AppImage (`./WinBridge.AppImage <command>`) or a source checkout (`python3 winbridge.py <command>`).
+
+```
+winbridge install <exe> [--profile ID] [--name NAME] [--runner ID] [--modules ...] [--dry-run]
+winbridge list
+winbridge launch <app> [--env KEY=VALUE ...] [--wrapper CMD] [--dry-run]
+winbridge remove <app> [--keep-prefix]
+winbridge profiles [--validate]
+winbridge runners [install|remove RUNNER_ID]
+winbridge syscheck
+winbridge check-modules MODULE [MODULE ...]
+winbridge handle-nxm <nxm-url>          # normally invoked automatically, not by hand
+winbridge plugin list|install|update|remove|info|resolve [ID] [--all] [--json] [--force-refresh]
+winbridge store search|refresh [QUERY] [--capability CAP] [--verified]
+winbridge settings list|get|set [KEY] [VALUE]
+winbridge --version
+```
+
+A few worth calling out:
+
+- `winbridge install setup.exe --profile gaming --dry-run` — shows exactly what would happen (prefix path, modules, runner) without touching anything.
+- `winbridge launch "My Game" --env SDL_VIDEODRIVER=x11 --wrapper gamemoderun --dry-run` — prints the final launch command and environment diff without launching, useful for debugging a launch-time problem.
+- `winbridge plugin resolve steam_deck --json` — dumps the fully plugin-merged state of a profile as JSON, including an audit log of which plugin touched what. The single best tool for debugging "why does my profile look different from what I expect."
+
+---
+
+## Snapshots & backups
+
+Every installed app can have versioned tarball snapshots of its Wine prefix taken from **My Apps**, stored under `~/.local/share/winbridge/snapshots/<app-id>/`. Up to 5 are kept per app; older ones are pruned automatically. This is what backs the "switch profile" workflow — if changing an app's profile/modules goes wrong, you can roll back to the last snapshot instead of reinstalling from scratch.
+
+---
+
+## Where WinBridge keeps its files
+
+Everything lives under `~/.local/share/winbridge/`:
+
+```text
+~/.local/share/winbridge/
+├── prefixes/        # one Wine prefix per installed app
+├── runners/         # downloaded Proton GE / Wine GE builds
+├── cache/           # store index cache, download cache
+├── plugins/         # installed plugins (see PLUGINS.md)
+├── snapshots/        # versioned prefix backups
+├── logs/            # winbridge.log (rotating)
+├── apps.json        # installed app records
+├── runners.json     # runner registry
+└── settings.json    # your settings
+```
+
+Nothing here lives inside the AppImage mount; the AppImage is read-only application code; all of your actual data is plain files in your home directory, so updating or reinstalling WinBridge never touches any of it.
+
+---
+
+## Logs & troubleshooting
+
+- Log file: `~/.local/share/winbridge/logs/winbridge.log` (rotating, so it won't grow unbounded). You can jump straight to it from **Settings → General**.
+- **System Check** page tells you exactly which dependency is missing and how to install it for your distro.
+- If a privileged action silently fails, check whether the PolicyKit helper installed correctly (`ls -l /usr/lib/winbridge/winbridge-helper` should show an executable owned by root) — if it's missing, WinBridge fell back to per-action `pkexec` prompts, which is fine but worth knowing.
+- `winbridge plugin resolve <profile_id> --json` is the fastest way to debug "this profile is behaving differently than I expect" when you have plugins installed.
+
+---
+
+## FAQ
+
+**Is this a Wine replacement?**
+No. WinBridge sits on top of Wine/Proton and orchestrates them; it never reimplements Windows API translation itself.
+
+**Do I need Windows at all?**
+No. You need the Windows installer file for the software you want to run; WinBridge and Wine handle the rest.
+
+**Will every Windows program work?**
+No tool can promise that. Wine/Proton compatibility varies by program, just as it would using Wine directly. WinBridge's job is to remove the *setup* friction, not to guarantee every program runs.
+
+**Does this replace Lutris/Bottles/Heroic?**
+Not exactly, there's real overlap, especially with Bottles. WinBridge's specific focus is the Windows-switcher onboarding experience (profiles tuned for non-gaming software too, the Hardware Hub, a heavier plugin/extension system) rather than being a general Wine prefix manager first.
+
+**Is my data safe if I uninstall WinBridge?**
+Yes, your prefixes, snapshots, and settings are plain files under `~/.local/share/winbridge/`, untouched by removing the AppImage itself. Removing *that* directory is what actually deletes your data; the two are intentionally separate steps.
+
+---
+
+## License
+
+GPLv3. See `LICENSE`.
 
 ## Related Projects
 
