@@ -80,12 +80,12 @@ WinBridge's sidebar has nine sections:
 |---|---|
 | **Dashboard** | At-a-glance stats, installed apps, runners, quick links to the other pages. |
 | **Profiles** | Browse every available profile (built-in + plugin-added), see what runner and modules each one uses. |
-| **Install App** | The main install wizard; pick an `.exe`, pick a profile, go. |
+| **Install App** | The main install wizard: pick an `.exe`, pick a profile, go. |
 | **My Apps** | Everything you've installed: launch, edit environment variables/launch wrapper, manage snapshots, uninstall. |
 | **Runners** | Install/remove Wine and Proton GE builds. WinBridge can also detect runners you already installed via Steam or ProtonUp-Qt without re-downloading them. |
 | **System Check** | Verifies Wine, Winetricks, Vulkan, GameMode, MangoHud, Mesa, PipeWire, and 32-bit support are present, with fix hints for anything missing. |
-| **System Tune** | The *GameTune Hub* — Steam launch wrapper management, ProcessSentry, kernel autotune, live tuning, setup. See its own section below. |
-| **Hardware Hub** | Guided fixes for CPU governor, GPU drivers, controller drivers, and notoriously bad-on-Linux Wi-Fi chipsets. See its own section below. |
+| **System Tune** | Used to be GameTune Hub. Steam launch wrapper management, ProcessSentry, kernel autotune, live tuning, setup. See its own section below. |
+| **Hardware Hub** | Used to be Gruffun Hub. Guided fixes for CPU governor, GPU drivers, controller drivers (wireless, SIM wheels, and many more), and notoriously bad-on-Linux Wi-Fi chipsets (Realtek and Broadcom). See its own section below. |
 | **Settings** | General preferences, custom data paths, plugin management, security (sandbox toggle), and About. |
 
 ---
