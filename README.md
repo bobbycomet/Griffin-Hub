@@ -269,5 +269,7 @@ at the cost of requiring `pip install PyQt6 pyyaml` on every machine it runs on.
 ## Extending Griffin Hub
 
 If there's a hardware quirk or tuning tweak you want that isn't here, you probably don't need to
-wait for a new release — you can write a plugin. See **[PLUGINS.md](./PLUGINS.md)** for the full
+wait for a new release you can write a plugin. See **[PLUGINS.md](./PLUGINS.md)** for the full
 guide, including working examples.
+
+Griffin Hub is part of the Griffin Linux project. The name Griffin Hub, the Griffin Linux name, and associated icons are protected under the GPLv3 to preserve the integrity of the branding in all distributed versions.
