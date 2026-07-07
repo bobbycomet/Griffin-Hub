@@ -1,3 +1,7 @@
+<div align="center">
+<img width="300" height="300" alt="griffinhub" src="https://github.com/user-attachments/assets/2387c148-a6f7-4f55-968b-66ebc1315bd9" />
+</div>
+
 # Griffin Hub
 
 **A PyQt6 desktop app for tuning your Linux system and managing your hardware — built to be extended.**
