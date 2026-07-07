@@ -66,8 +66,8 @@ so nothing feels bolted on, regardless of which daemon or subsystem a given scre
 ### Dashboard
 
 The landing page. Five at-a-glance gauges (CPU, RAM, GPU, VRAM, temperature), live status from
-ProcessSentry and Kernel Autotune — the two things running in the background that only Griffin Hub
-actually knows about — and four simple 60-second history graphs (CPU/RAM/GPU/VRAM). It's deliberately
+ProcessSentry and Kernel Autotune, the two things running in the background that only Griffin Hub
+actually knows about, and four simple 60-second history graphs (CPU/RAM/GPU/VRAM). It's deliberately
 narrow in scope: no process tree, no network analyzer, no disk analyzer, nothing resembling htop
 bundled into the app. It exists to answer one question — *did clicking that button actually do
 something* — not to replace a system monitor. GPU/VRAM readings currently support NVIDIA (via
@@ -82,7 +82,7 @@ System Tune is itself a tabbed page. Each tab controls a different piece of the 
 A dashboard for the System Tune stack as a whole: which of the relevant binaries are actually
 installed (`gamemoderun`, `gamescope`, `mangohud`, ProcessSentry, Kernel Autotune), the live status
 of both background services, and whether the Steam launch wrapper is currently active. This is the
-"is everything wired up correctly" tab — start here if something else isn't working.
+"is everything wired up correctly" tab. Start here if something else isn't working.
 
 #### Steam Wrappers
 Griffin Hub can wrap your Steam launch command with GameMode, gamescope, and MangoHud, combined
@@ -93,7 +93,7 @@ options for every game. This tab lets you:
 - Back up and restore your original `steam.desktop` file before Griffin Hub touches it
 - Regenerate the wrapper script at any time as you change settings
 
-Nothing here requires a background daemon — it's a one-time (well, one-time-per-change) script
+Nothing here requires a background daemon; it's a one-time (well, one-time-per-change) script
 generation step, applied via `pkexec`.
 
 #### ProcessSentry
@@ -120,7 +120,7 @@ network congestion control/queueing discipline.
 
 This tab is a full live editor for `/etc/kernel-autotune/config.sh` — **this file is yours to edit**;
 every setting it contains has a form field here. Alongside it, `/etc/kernel-autotune/state.json` is
-shown as **read-only system info** (detected hardware, last-applied values, last apply status) —
+shown as **read-only system info** (detected hardware, last-applied values, last apply status),
 it's a snapshot of what the daemon detected and last did, not something you edit directly.
 
 > **Griffin Hub shows either "Kernel Autotune" or "Live Tuning" — never both.**
@@ -128,13 +128,13 @@ it's a snapshot of what the daemon detected and last did, not something you edit
 > If it isn't installed, the tab is replaced with **Live Tuning**: the same categories of settings
 > (governor, swappiness, dirty ratios, THP, ZRAM, TCP congestion control, qdisc, I/O scheduler,
 > network buffer sizes) applied immediately via `pkexec`, with no persistent config file and no
-> daemon required. Either way, you can tune your kernel live from this tab — which underlying
+> daemon required. Either way, you can tune your kernel live from this tab, which underlying
 > mechanism you get just depends on what's installed. Installing Kernel Autotune (from the Setup tab)
 > swaps you over to the full editor without needing to restart the app.
 
 #### Setup
 Installs everything System Tune depends on: the required packages (`gamemode`, `gamescope`,
-`mangohud`, `python3-psutil`, `python3-yaml` — plus anything a plugin has added to this list, see
+`mangohud`, `python3-psutil`, `python3-yaml`, plus anything a plugin has added to this list, see
 `PLUGINS.md`), the ProcessSentry and Kernel Autotune systemd service files, and adds your user to
 the `gamemode` group. This is the tab to run once, on a fresh install, before touching anything else.
 
@@ -154,7 +154,7 @@ Hardware Hub doesn't depend on any background daemon — everything here is a di
 
 ### Plugins
 
-Shows every plugin currently loaded — name, version, author, and trust level — along with any load
+Shows every plugin currently loaded, name, version, author, and trust level, along with any load
 warnings, and lets you run the checks and one-click actions that plugins have registered for either
 System Tune or Hardware Hub, right from this page. Plugins can `git clone` driver sources (into a
 dedicated, user-owned directory — never a system path) as part of a check or action, which is how
