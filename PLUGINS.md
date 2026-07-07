@@ -1,8 +1,8 @@
 # Writing Griffin Hub Plugins
 
 Griffin Hub plugins extend exactly two things: **System Tune** and the **Hardware Hub**. A plugin
-is a single Python file (or a small folder — see [Multi-file plugins](#multi-file-plugins)) that
-declares diagnostic checks, one-click actions, and — for trusted plugins only — small, well-defined
+is a single Python file (or a small folder, see Multi-file plugins that
+declares diagnostic checks, one-click actions, and for trusted plugins only, small, well-defined
 extensions to a couple of built-in configuration points.
 ---
 
