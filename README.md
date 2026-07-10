@@ -272,4 +272,28 @@ If there's a hardware quirk or tuning tweak you want that isn't here, you probab
 wait for a new release you can write a plugin. See **[PLUGINS.md](./PLUGINS.md)** for the full
 guide, including working examples.
 
-Griffin Hub is part of the Griffin Linux project. The name Griffin Hub, the Griffin Linux name, and associated icons are protected under the GPLv3 to preserve the integrity of the branding in all distributed versions.
+Griffin Hub is licensed under the GPLv3, and forks and derivative projects are welcome.
+
+If you build on Griffin Hub, please:
+
+- Keep the GPLv3 license terms intact.
+- Give appropriate credit to the original Griffin Hub project.
+- Include a link back to this repository where practical.
+
+If you're building something cool with it, I'd love to hear about it!
+
+## Community and Support
+
+- **Discord:** [Join Here](https://discord.gg/7fEt5W7DPh)
+- **Patreon (Beta Builds):** [Patreon](https://www.patreon.com/c/BobbyComet/membership)
+- **Support the Griffin Project:** [Ko-fi](https://ko-fi.com/bobby60908)
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/bobbycomet/Appify/main/Griffin-G.png" alt="Griffin Linux" width="15%"/>
+  <p><strong>Griffin Linux. Where power meets simplicity.</strong><br/>
+  Made with Windows switchers in mind. Built for everyone who wants a better PC.</p>
+</div>
+
+The Griffin Hub and Griffin Linux names, logos, and branding are not covered by the GPL license and may not be used to imply endorsement 
+or official affiliation without permission. Forks are encouraged, but please rename and rebrand modified versions unless you've 
+received permission to use the original branding.
