@@ -6,7 +6,7 @@
 
 **A PyQt6 desktop app for tuning your Linux system and managing your hardware — built to be extended.**
 
-Version 1.0.0 · Linux (Ubuntu/Debian-focused, KDE Plasma friendly) · Python 3 + PyQt6
+Version 1.0.1 · Linux (Ubuntu/Debian-focused, KDE Plasma friendly) · Python 3 + PyQt6
 
 ---
 
