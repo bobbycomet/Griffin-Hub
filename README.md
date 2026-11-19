@@ -1,12 +1,12 @@
 <div align="center">
-<img width="300" height="300" alt="griffinhub" src="https://github.com/user-attachments/assets/2387c148-a6f7-4f55-968b-66ebc1315bd9" />
+<img width="512" height="512" alt="griffinhub" src="https://github.com/user-attachments/assets/8823bd94-b998-4f80-95cf-f8ac89e0f182" />
 </div>
 
 # Griffin Hub
 
 **A PyQt6 desktop app for tuning your Linux system and managing your hardware — built to be extended.**
 
-Version 1.0.1 · Linux (Ubuntu/Debian-focused, KDE Plasma friendly) · Python 3 + PyQt6
+Version 2.0.0 · Linux (Ubuntu/Debian-focused, KDE Plasma friendly) · Python 3 + PyQt6
 
 Development updates will be in the [changelog](https://github.com/bobbycomet/Griffin-Hub/blob/main/.github/changelog.md)
 
