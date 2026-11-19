@@ -1,0 +1,9 @@
+#!/bin/sh
+# $1 = exit status of ./run. 78 = missing Python module / duplicate instance:
+# retrying cannot help, so stop instead of respawning every second.
+if [ "$1" = "78" ]; then
+    sv down . 2>/dev/null || touch down
+    exit 0
+fi
+# Rate-limit crash loops (runsv itself only waits 1s).
+sleep 4

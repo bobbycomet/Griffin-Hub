@@ -1,0 +1,2910 @@
+#!/usr/bin/env bash
+# kernel-autotune v2.4.0
+# Intelligent kernel tuning with predictable behavior and safety.
+# Distro- and kernel-aware: detects the distribution family, init system and
+# kernel flavor/capabilities, and adapts what it applies (and how) to match.
+#
+# Usage: kernel-autotune [--dry-run] [--quiet|--verbose] {install|apply|regen-config|uninstall|status|detect|--version}
+SCRIPT_VERSION="2.4.0"
+# Version of the zram implementation this script embeds / will accept from disk.
+ZRAM_IMPL_VERSION="2.4"
+
+set -euo pipefail
+IFS=$'\n\t'
+# systemd units, `su` without "-", and some minimal images don't have the sbin
+# dirs on PATH; sysctl/modprobe/swapon/mkswap live there on most distros.
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin${PATH:+:$PATH}"
+
+SCRIPT_NAME="$(basename "$0")"
+WORKDIR="/etc/kernel-autotune"
+CONFIG_FILE="$WORKDIR/config.sh"
+STATE_FILE="$WORKDIR/state.json"
+SYSCTL_CONF="/etc/sysctl.d/99-kernel-autotune.conf"
+LOG_FILE="/var/log/kernel-autotune.log"
+LOCK_FILE="/run/kernel-autotune.lock"
+
+# Install locations are resolved by init_paths() once flags are parsed:
+# /usr/local normally, a persistent writable fallback on read-only-root
+# systems (SteamOS, NixOS, ...). See init_paths().
+PREFIX=""
+BIN_DIR=""
+LIB_DIR=""
+ZRAM_SCRIPT=""
+CANONICAL_ZRAM_IMPL=""
+
+# Test/override hooks (undocumented in --help on purpose; used by the test
+# harness to exercise other distros' detection on a single machine):
+#   KAT_OS_RELEASE  path to an os-release file
+#   KAT_UNAME_R     fake `uname -r`
+#   KAT_UNAME_V     fake `uname -v`
+#   KAT_PREFIX      force the install prefix
+OS_RELEASE_FILE="${KAT_OS_RELEASE:-/etc/os-release}"
+
+# ---- Logging level ----
+# 0 = quiet (warnings/errors only), 1 = normal (default), 2 = verbose
+LOG_LEVEL=1
+# Dry-run: print what would happen without making any changes
+DRY_RUN=0
+# Scratch dir used by --dry-run so it never touches the real config/state.
+DRYRUN_TMP=""
+
+# ==================== Logging ====================
+_write_log() {
+    # The braces matter: a failing `>>` redirection reports its error to the
+    # *original* stderr before a trailing `2>/dev/null` takes effect, which
+    # made non-root --dry-run print "Permission denied" for the log file.
+    { echo "$(date '+%Y-%m-%d %H:%M:%S'): [$SCRIPT_NAME v${SCRIPT_VERSION}] $*" >> "$LOG_FILE"; } 2>/dev/null || true
+}
+
+log() {
+    # Normal messages — suppressed in quiet mode
+    if [ "$LOG_LEVEL" -ge 1 ]; then echo "[$SCRIPT_NAME] $*"; fi
+    _write_log "$*"
+}
+
+verbose() {
+    # Detail messages — only shown in verbose mode, always logged
+    if [ "$LOG_LEVEL" -ge 2 ]; then echo "[$SCRIPT_NAME] $*"; fi
+    _write_log "[verbose] $*"
+}
+
+warn() {
+    # Warnings — always shown regardless of log level
+    echo "[$SCRIPT_NAME] WARNING: $*" >&2
+    _write_log "WARNING: $*"
+}
+
+error() {
+    echo "[$SCRIPT_NAME] ERROR: $*" >&2
+    _write_log "ERROR: $*"
+    exit 1
+}
+
+dry_run_notice() {
+    # Print a dry-run action instead of performing it
+    echo "[DRY RUN] $*"
+    _write_log "[dry-run] $*"
+}
+
+# Fix #31: Use id -u instead of $EUID so this works under sh as well as bash.
+need_root() {
+    # Dry-run can be used without root since nothing is written
+    [ "$DRY_RUN" = "1" ] && return 0
+    if [ "$(id -u)" -ne 0 ]; then
+        error "Must run as root (or use --dry-run to preview without root)"
+    fi
+}
+
+# Fix #23: Acquire an exclusive lock so concurrent invocations don't race on
+# config/state files or sysfs writes.
+acquire_lock() {
+    # Dry-run writes nothing, so it must not need /run to be writable (it
+    # previously died here when run as a normal user, contradicting need_root).
+    [ "$DRY_RUN" = "1" ] && return 0
+    # flock is util-linux (busybox has an applet too); if a stripped-down
+    # system lacks it, running unlocked beats refusing to tune at boot.
+    if ! command -v flock >/dev/null 2>&1; then
+        warn "flock not found — running without an instance lock"
+        return 0
+    fi
+    exec 9>"$LOCK_FILE"
+    if ! flock -n 9; then
+        error "Another instance of $SCRIPT_NAME is already running (lock: $LOCK_FILE)"
+    fi
+}
+
+# ==================== Low-level helpers ====================
+_uname_r() { echo "${KAT_UNAME_R:-$(uname -r 2>/dev/null || echo unknown)}"; }
+_uname_v() { echo "${KAT_UNAME_V:-$(uname -v 2>/dev/null || echo unknown)}"; }
+
+_lower() { tr '[:upper:]' '[:lower:]'; }
+
+# Write to a sysfs/procfs knob. The braces matter: a failing `> file` reports
+# its error to the original stderr before a trailing 2>/dev/null applies.
+_sysfs_write() { { printf '%s\n' "$1" > "$2"; } 2>/dev/null; }
+
+# Read one field from os-release without polluting this shell's namespace
+# (os-release is shell syntax; sourcing it in a subshell is the documented way).
+_os_release_field() {
+    [ -r "$OS_RELEASE_FILE" ] || return 0
+    (
+        # shellcheck source=/dev/null
+        . "$OS_RELEASE_FILE" 2>/dev/null || true
+        printf '%s' "${!1:-}"
+    )
+}
+
+# True if a directory is writable *and* on a writable filesystem. access(2)
+# reports EROFS for read-only mounts, so [ -w ] is accurate even for root.
+_dir_writable() { [ -d "$1" ] && [ -w "$1" ]; }
+
+# Is a systemd unit file known (installed)? `systemctl cat` avoids the
+# `list-unit-files | grep -q` SIGPIPE trap, which under `set -o pipefail`
+# randomly reports failure when grep exits before systemctl finishes writing.
+_unit_known() {
+    command -v systemctl >/dev/null 2>&1 || return 1
+    systemctl cat "$1" >/dev/null 2>&1
+}
+
+# At boot kernel-autotune runs *before* most desktop services start, so
+# "is it running right now" would miss them; "enabled or active" is the
+# reliable signal that a service will be managing something.
+_unit_enabled_or_active() {
+    [ -d /run/systemd/system ] || return 1
+    command -v systemctl >/dev/null 2>&1 || return 1
+    systemctl is-enabled "$1" >/dev/null 2>&1 && return 0
+    systemctl is-active "$1" >/dev/null 2>&1 && return 0
+    return 1
+}
+
+# Does the running kernel provide a module (loadable or built in)?
+# `modinfo -n` succeeds for both, and — unlike reading
+# tcp_available_congestion_control — doesn't need the module to be loaded yet.
+_kernel_has_module() {
+    command -v modinfo >/dev/null 2>&1 || return 1
+    modinfo -n "$1" >/dev/null 2>&1
+}
+
+# ==================== Distro Detection ====================
+detect_distro_id() {
+    local id=""
+    id="$(_os_release_field ID | _lower)"
+    if [ -z "$id" ]; then
+        # No os-release (very old or very minimal systems): fall back to the
+        # per-distro release marker files.
+        if   [ -e /etc/arch-release ];   then id="arch"
+        elif [ -e /etc/alpine-release ]; then id="alpine"
+        elif [ -e /etc/gentoo-release ]; then id="gentoo"
+        elif [ -e /etc/debian_version ]; then id="debian"
+        elif [ -e /etc/SuSE-release ];   then id="opensuse"
+        elif [ -e /etc/redhat-release ]; then id="rhel"
+        elif [ -e /etc/NIXOS ];          then id="nixos"
+        else id="unknown"
+        fi
+    fi
+    echo "$id"
+}
+
+# Collapse the hundreds of distros into the handful of families that actually
+# differ for our purposes (package names, init, default services, layout).
+# ID is checked first, then every ID_LIKE token, so derivatives of derivatives
+# (Mint -> Ubuntu -> Debian, Nobara -> Fedora) resolve correctly.
+detect_distro_family() {
+    # IFS is newline/tab script-wide; ID_LIKE is space separated.
+    local IFS=$' \t\n'
+    local id like t
+    id="$(detect_distro_id)"
+    like="$(_os_release_field ID_LIKE | _lower)"
+    for t in $id $like; do
+        case "$t" in
+            debian|ubuntu|raspbian|linuxmint|pop|devuan|kali|neon|elementary|zorin|mx|deepin|pureos|parrot|tuxedo)
+                echo "debian"; return 0 ;;
+            rhel|fedora|centos|rocky|almalinux|ol|amzn|nobara|bazzite|scientific|eurolinux)
+                echo "rhel"; return 0 ;;
+            arch|manjaro|endeavouros|cachyos|garuda|artix|arcolinux|steamos|chimeraos|holo)
+                echo "arch"; return 0 ;;
+            suse|opensuse|opensuse-leap|opensuse-tumbleweed|opensuse-microos|sles|sled)
+                echo "suse"; return 0 ;;
+            alpine|postmarketos)
+                echo "alpine"; return 0 ;;
+            gentoo|funtoo|calculate)
+                echo "gentoo"; return 0 ;;
+            void)
+                echo "void"; return 0 ;;
+            nixos)
+                echo "nixos"; return 0 ;;
+            clear-linux-os)
+                echo "clear"; return 0 ;;
+            solus)
+                echo "solus"; return 0 ;;
+            slackware)
+                echo "slackware"; return 0 ;;
+        esac
+    done
+    echo "unknown"
+}
+
+# Best-effort distro pretty name. /etc/os-release is the standard on every
+# systemd distro; fall back to lsb_release, then uname, then "unknown"
+# rather than letting set -e kill the whole run over a missing file.
+get_distro() {
+    local distro=""
+    distro="$(_os_release_field PRETTY_NAME)"
+    if [ -z "$distro" ] && command -v lsb_release >/dev/null 2>&1; then
+        distro="$(lsb_release -ds 2>/dev/null | tr -d '"')"
+    fi
+    [ -z "$distro" ] && distro="$(uname -s) $(uname -r)"
+    echo "$distro"
+}
+
+detect_pkg_manager() {
+    case "$(detect_distro_family)" in
+        debian)    echo "apt" ;;
+        rhel)      if command -v dnf >/dev/null 2>&1; then echo "dnf"; else echo "yum"; fi ;;
+        arch)      echo "pacman" ;;
+        suse)      echo "zypper" ;;
+        alpine)    echo "apk" ;;
+        void)      echo "xbps" ;;
+        gentoo)    echo "emerge" ;;
+        solus)     echo "eopkg" ;;
+        clear)     echo "swupd" ;;
+        nixos)     echo "nix" ;;
+        *)         echo "unknown" ;;
+    esac
+}
+
+# Map a generic tool name to the package that provides it on this family.
+_pkg_for() {
+    local family="$1" tool="$2"
+    case "$tool" in
+        flock|swapon|mkswap|swapoff) echo "util-linux" ;;
+        modprobe|modinfo)            echo "kmod" ;;
+        python3)
+            case "$family" in
+                arch) echo "python" ;;
+                gentoo) echo "dev-lang/python" ;;
+                *) echo "python3" ;;
+            esac ;;
+        sysctl)
+            case "$family" in
+                debian|suse) echo "procps" ;;
+                gentoo)      echo "sys-process/procps" ;;
+                *)           echo "procps-ng" ;;
+            esac ;;
+        *) echo "$tool" ;;
+    esac
+}
+
+# Print a distro-appropriate install command for the given tools.
+pkg_hint() {
+    local family pm pkgs="" t
+    family="$(detect_distro_family)"
+    pm="$(detect_pkg_manager)"
+    for t in "$@"; do pkgs+="$(_pkg_for "$family" "$t") "; done
+    # De-duplicate while keeping order.
+    pkgs="$(echo "$pkgs" | tr ' ' '\n' | awk 'NF && !seen[$0]++' | tr '\n' ' ')"
+    pkgs="${pkgs% }"
+    case "$pm" in
+        apt)    echo "apt install $pkgs" ;;
+        dnf)    echo "dnf install $pkgs" ;;
+        yum)    echo "yum install $pkgs" ;;
+        pacman) echo "pacman -S $pkgs" ;;
+        zypper) echo "zypper install $pkgs" ;;
+        apk)    echo "apk add $pkgs" ;;
+        xbps)   echo "xbps-install -S $pkgs" ;;
+        emerge) echo "emerge --ask $pkgs" ;;
+        eopkg)  echo "eopkg install $pkgs" ;;
+        swupd)  echo "swupd bundle-add $pkgs" ;;
+        nix)    echo "add $pkgs to environment.systemPackages" ;;
+        *)      echo "install: $pkgs" ;;
+    esac
+}
+
+# Hard requirements abort nothing here — they just produce a precise,
+# distro-specific message so the failure isn't a cryptic "command not found".
+check_dependencies() {
+    local hard_missing=() soft_missing=() c
+    for c in awk sed grep tr sysctl; do
+        command -v "$c" >/dev/null 2>&1 || hard_missing+=("$c")
+    done
+    for c in modprobe modinfo flock python3; do
+        command -v "$c" >/dev/null 2>&1 || soft_missing+=("$c")
+    done
+    if [ "${#hard_missing[@]}" -gt 0 ]; then
+        warn "Required tools missing: ${hard_missing[*]}"
+        warn "On this system: $(pkg_hint "${hard_missing[@]}")"
+    fi
+    if [ "${#soft_missing[@]}" -gt 0 ]; then
+        verbose "Optional tools missing (features degrade gracefully): ${soft_missing[*]}"
+        verbose "To add them: $(pkg_hint "${soft_missing[@]}")"
+    fi
+    return 0
+}
+
+# ==================== Init / Environment Detection ====================
+detect_init_system() {
+    # Test hook (like KAT_OS_RELEASE): force the answer.
+    if [ -n "${KAT_INIT:-}" ]; then echo "$KAT_INIT"; return 0; fi
+    local comm=""
+    comm="$(cat /proc/1/comm 2>/dev/null || true)"
+    if   [ -d /run/systemd/system ];                       then echo "systemd"
+    elif [ "$comm" = "runit" ] || [ -d /run/runit ];      then echo "runit"
+    elif [ "$comm" = "dinit" ] || [ -d /run/dinitctl ];   then echo "dinit"
+    elif [ -d /run/openrc ] || [ -x /sbin/openrc-run ] || [ -x /usr/sbin/openrc-run ]; then echo "openrc"
+    elif [[ "$comm" == s6-* ]];                           then echo "s6"
+    else echo "unknown"
+    fi
+}
+
+is_container() {
+    if command -v systemd-detect-virt >/dev/null 2>&1; then
+        systemd-detect-virt --container >/dev/null 2>&1 && return 0
+        return 1
+    fi
+    [ -e /.dockerenv ] || [ -e /run/.containerenv ]
+}
+
+# True when / is mounted read-only (SteamOS, MicroOS, Silverblue's /usr, ...).
+root_is_readonly() {
+    local opts
+    opts="$(awk '$2 == "/" { o = $4 } END { print o }' /proc/mounts 2>/dev/null || true)"
+    [[ ",$opts," == *,ro,* ]]
+}
+
+# ==================== System Detection ====================
+# Kernel *flavor* — the tuning profile. Most-specific patchset names first;
+# then structural flavors (realtime, hardened, cloud, ...) that matter to
+# tuning no matter which distro built them; everything else is "generic"
+# (which covers stock Ubuntu/Debian/Fedora/RHEL/Arch/openSUSE/... kernels).
+detect_kernel() {
+    local k v id
+    k="$(_uname_r | _lower)"
+    v="$(_uname_v | _lower)"
+    id="$(detect_distro_id)"
+
+    # Anchored "rt" token, so "...-rt5", "-rt-amd64" match but "...-rtl8821" doesn't.
+    local rt_re='(^|[-.+])rt([0-9]|[-.+]|$)'
+
+    # --- out-of-tree patchset kernels (distro-independent) ---
+    # Fix #25: Anchor "ck" with a leading hyphen/dot so it doesn't match
+    # unrelated substrings like "rockchip" or "pocketbook".
+    if   [[ "$k" == *xanmod* ]];                          then echo "xanmod"
+    elif [[ "$k" == *liquorix* || "$k" == *-lqx* ]];      then echo "liquorix"
+    elif [[ "$k" == *cachyos* ]];                         then echo "cachyos"
+    elif [[ "$k" == *-zen* ]];                            then echo "zen"
+    elif [[ "$k" == *tkg* ]];                             then echo "tkg"
+    elif [[ "$k" == *-ck* || "$k" == *-ck[0-9]* ]];       then echo "ck"
+    elif [[ "$k" == *fsync* || "$k" == *-valve* || "$k" == *neptune* ]]; then echo "fsync"
+    elif [[ "$k" == *clear* ]] || { [ "$id" = "clear-linux-os" ] && [[ "$k" == *.native || "$k" == *.kvm ]]; }; then echo "clear"
+    # --- structural flavors ---
+    elif [ -e /sys/kernel/realtime ] || [[ "$v" == *preempt_rt* ]] || [[ "$k" =~ $rt_re ]]; then echo "rt"
+    elif [[ "$k" == *lowlatency* ]];                      then echo "lowlatency"
+    elif [[ "$k" == *hardened* ]];                        then echo "hardened"
+    elif [[ "$k" == *microsoft* || "$k" == *wsl* ]];      then echo "wsl"
+    elif [[ "$k" == *-pve* ]];                            then echo "proxmox"
+    elif [[ "$k" == *rpi* || "$k" == *raspi* || "$k" == *+rpt* ]]; then echo "rpi"
+    elif [[ "$k" == *asahi* ]];                           then echo "asahi"
+    elif [[ "$k" == *-aws* || "$k" == *-azure* || "$k" == *-gcp* || "$k" == *-gke* \
+         || "$k" == *-oracle* || "$k" == *-kvm* || "$k" == *-cloud* || "$k" == *-virt* ]]; then echo "cloud"
+    elif [[ "$k" == *-lts* ]];                            then echo "lts"
+    else echo "generic"
+    fi
+}
+
+# "major.minor" of the running kernel, e.g. "6.12" (distro suffixes ignored).
+get_kernel_mm() {
+    local mm
+    mm="$(_uname_r | sed -E 's/^([0-9]+)\.([0-9]+).*/\1.\2/')"
+    [[ "$mm" =~ ^[0-9]+\.[0-9]+$ ]] || mm="0.0"
+    echo "$mm"
+}
+
+# kernel_at_least MAJOR MINOR
+kernel_at_least() {
+    local mm major minor
+    mm="$(get_kernel_mm)"
+    major="${mm%%.*}"
+    minor="${mm##*.}"
+    [ "$major" -gt "$1" ] || { [ "$major" -eq "$1" ] && [ "$minor" -ge "$2" ]; }
+}
+
+# Preemption model as compiled in: uname -v carries PREEMPT_RT / PREEMPT_DYNAMIC / PREEMPT.
+get_preempt_model() {
+    local v
+    v="$(_uname_v | tr '[:lower:]' '[:upper:]')"
+    if   [ -e /sys/kernel/realtime ] || [[ "$v" == *PREEMPT_RT* ]]; then echo "rt"
+    elif [[ "$v" == *PREEMPT_DYNAMIC* ]]; then echo "dynamic"
+    elif [[ "$v" == *PREEMPT* ]];         then echo "preempt"
+    else echo "voluntary"
+    fi
+}
+
+has_psi() {
+    [ -r /proc/pressure/memory ]
+}
+
+# v2 (unified), hybrid (v1 controllers + v2 at /sys/fs/cgroup/unified), v1, or none.
+get_cgroup_version() {
+    local fstype=""
+    fstype="$(stat -fc %T /sys/fs/cgroup 2>/dev/null || true)"
+    if   [ "$fstype" = "cgroup2fs" ]; then echo "v2"
+    elif [ -d /sys/fs/cgroup/unified ]; then echo "hybrid"
+    elif [ -d /sys/fs/cgroup ] && [ -n "$fstype" ]; then echo "v1"
+    else echo "none"
+    fi
+}
+
+# Which tool (if any) is already managing zram on this system. Different
+# distros ship different ones by default — Fedora/Arch/CachyOS use
+# zram-generator, Debian zram-tools, Ubuntu zram-config, Gentoo zram-init —
+# and kernel-autotune has to know so the two don't silently fight.
+detect_zram_manager() {
+    local gen c
+    for gen in /usr/lib/systemd/system-generators/zram-generator \
+               /lib/systemd/system-generators/zram-generator; do
+        if [ -x "$gen" ]; then
+            for c in /etc/systemd/zram-generator.conf /run/systemd/zram-generator.conf \
+                     /usr/local/lib/systemd/zram-generator.conf /usr/lib/systemd/zram-generator.conf; do
+                if [ -s "$c" ]; then echo "zram-generator"; return 0; fi
+            done
+            if [ -d /etc/systemd/zram-generator.conf.d ] && [ -n "$(ls -A /etc/systemd/zram-generator.conf.d 2>/dev/null)" ]; then
+                echo "zram-generator"; return 0
+            fi
+        fi
+    done
+    if [ -e /etc/default/zramswap ] && { _unit_enabled_or_active zramswap.service || [ ! -d /run/systemd/system ]; }; then
+        echo "zram-tools"; return 0
+    fi
+    if [ -x /usr/bin/init-zram-swapping ] && _unit_enabled_or_active zram-config.service; then
+        echo "zram-config"; return 0
+    fi
+    if { [ -x /usr/bin/zramen ] || [ -x /usr/local/bin/zramen ]; } && _unit_enabled_or_active zramen.service; then
+        echo "zramen"; return 0
+    fi
+    if [ -x /etc/init.d/zram-init ]; then
+        echo "zram-init"; return 0
+    fi
+    echo "none"
+}
+
+# Which tool is already managing CPU frequency / power policy. These set
+# governors and energy-performance preferences themselves, so applying ours
+# blindly would fight them.
+detect_power_manager() {
+    if   _unit_enabled_or_active tlp.service;                  then echo "tlp"
+    elif _unit_enabled_or_active auto-cpufreq.service;         then echo "auto-cpufreq"
+    elif _unit_enabled_or_active tuned.service;                then echo "tuned"
+    elif _unit_enabled_or_active power-profiles-daemon.service; then echo "power-profiles-daemon"
+    else echo "none"
+    fi
+}
+
+get_cpufreq_driver() {
+    cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_driver 2>/dev/null || echo "none"
+}
+
+# Chassis type from DMI is the most reliable laptop signal (8 Portable,
+# 9 Laptop, 10 Notebook, 14 Sub Notebook, 30 Tablet, 31 Convertible,
+# 32 Detachable). Otherwise accept a *system* battery. Peripheral batteries
+# (wireless mice, keyboards, headsets, game controllers) also appear under
+# power_supply as type Battery with scope=Device — those must not make a
+# desktop look like a laptop (the old check matched any "battery").
+is_laptop() {
+    local chassis="" ps type scope
+    chassis="$(cat /sys/class/dmi/id/chassis_type 2>/dev/null || true)"
+    case "$chassis" in
+        8|9|10|14|30|31|32) return 0 ;;
+    esac
+    for ps in /sys/class/power_supply/*; do
+        [ -r "$ps/type" ] || continue
+        type="$(cat "$ps/type" 2>/dev/null || true)"
+        [ "$type" = "Battery" ] || continue
+        scope="$(cat "$ps/scope" 2>/dev/null || true)"
+        [ "$scope" = "Device" ] && continue
+        return 0
+    done
+    return 1
+}
+
+is_handheld() {
+    # Fix #16: Use DMI (hardware-set) instead of hostname (user-set). Look at
+    # several DMI fields: Lenovo's Legion Go puts its marketing name in
+    # product_version (product_name is just a model number like "83E1").
+    local d=/sys/class/dmi/id f s=""
+    for f in sys_vendor product_name product_version product_family board_name; do
+        s+=" $(cat "$d/$f" 2>/dev/null | _lower || true)"
+    done
+    local re='(steam deck|rog ally|legion go|msi claw|ayaneo|onexplayer|onexfly|zotac zone)'
+    [[ "$s" =~ $re ]] && return 0
+    # Valve's board names for Steam Deck LCD / OLED
+    if [[ "$s" == *valve* ]] && { [[ "$s" == *jupiter* ]] || [[ "$s" == *galileo* ]]; }; then
+        return 0
+    fi
+    [ -e /sys/class/power_supply/axp20x-battery ]
+}
+
+get_ram_mb() {
+    awk '/MemTotal/ {printf "%.0f", $2/1024}' /proc/meminfo
+}
+
+get_cpu_cores() {
+    nproc 2>/dev/null || grep -c '^processor' /proc/cpuinfo || echo 1
+}
+
+is_numa_system() {
+    # Fix #4: wc -w on a cpulist like "4-7" always returns 1 (one token).
+    # Instead check that the file is non-empty, which reliably indicates
+    # that node1 has CPUs assigned to it.
+    [ -d /sys/devices/system/node/node1 ] && \
+        [ -s /sys/devices/system/node/node1/cpulist ]
+}
+
+# Detect SSD/NVMe/eMMC/virtio-ssd devices.
+has_ssd() {
+    local found=0 disk
+    for disk in /sys/block/sd* /sys/block/nvme* /sys/block/mmcblk* /sys/block/vd* /sys/block/xvd*; do
+        [ -e "$disk/queue/rotational" ] || continue
+        if [ "$(cat "$disk/queue/rotational" 2>/dev/null || echo 1)" -eq 0 ]; then
+            found=1
+            break
+        fi
+    done
+    echo $found
+}
+
+has_thermal_control() {
+    [ -d /sys/class/thermal/thermal_zone0 ] && \
+        [ -e /sys/class/thermal/thermal_zone0/temp ]
+}
+
+# Fix #36/#37: Check whether a TCP congestion algorithm is available in the kernel.
+# Most distros build tcp_bbr as a *module*, which isn't listed in
+# tcp_available_congestion_control until something loads it — so "not listed"
+# used to mean "never use BBR" on Ubuntu, Fedora, Arch, ... Also accept a
+# module the running kernel can load (setting the sysctl auto-loads it).
+get_tcp_congestion() {
+    local preferred="$1"
+    local fallback="$2"
+    if [ -f /proc/sys/net/ipv4/tcp_available_congestion_control ]; then
+        if grep -qw "$preferred" /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null; then
+            echo "$preferred"
+            return
+        fi
+    fi
+    if _kernel_has_module "tcp_${preferred}"; then
+        echo "$preferred"
+        return
+    fi
+    echo "$fallback"
+}
+
+# Fix #37: Pair qdisc with the chosen congestion algorithm.
+get_net_qdisc() {
+    local algo="$1"
+    # fq pairs specifically with BBR; fq_codel is better for other algorithms.
+    # Only choose fq if this kernel actually has it (CONFIG_NET_SCH_FQ).
+    if [ "$algo" = "bbr" ] && _kernel_has_module sch_fq; then
+        echo "fq"
+    else
+        echo "fq_codel"
+    fi
+}
+
+# ==================== System Info (Identification) ====================
+# These are descriptive/informational only — none of them feed tuning
+# decisions. They exist purely so state.json carries enough context to
+# identify the machine and diagnose issues without SSH-ing in.
+
+get_hostname() {
+    hostname 2>/dev/null || cat /proc/sys/kernel/hostname 2>/dev/null || echo "unknown"
+}
+
+get_kernel_version() {
+    _uname_r
+}
+
+# /proc/cpuinfo's "model name" is absent on some architectures (e.g. some
+# ARM boards use "Hardware"/"Model" instead) — try a couple of fallbacks
+# before giving up.
+get_cpu_model() {
+    local model=""
+    model="$(awk -F': ' '/^model name/ {print $2; exit}' /proc/cpuinfo 2>/dev/null)"
+    if [ -z "$model" ]; then
+        model="$(awk -F': ' '/^Model/ {print $2; exit}' /proc/cpuinfo 2>/dev/null)"
+    fi
+    [ -z "$model" ] && model="unknown"
+    echo "$model"
+}
+
+# GPU model detection, preferring vendor tools (which give the cleanest
+# name) and falling back to lspci, then to "unknown" if neither is present.
+# Handles multi-GPU systems by joining all matches with "; ".
+get_gpu_model() {
+    local models=""
+
+    if command -v nvidia-smi >/dev/null 2>&1; then
+        models="$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | paste -sd '; ' -)"
+    fi
+
+    if [ -z "$models" ] && command -v lspci >/dev/null 2>&1; then
+        # Match VGA/3D/display controllers, strip the leading "VGA compatible
+        # controller: " style prefix lspci adds so we keep just the model.
+        models="$(lspci 2>/dev/null | grep -Ei 'vga|3d controller|display controller' \
+            | sed -E 's/^[0-9a-f:.]+ [^:]+: //' | paste -sd '; ' -)"
+    fi
+
+    [ -z "$models" ] && models="unknown"
+    echo "$models"
+}
+
+# GPU driver/version detection. NVIDIA proprietary driver version comes from
+# nvidia-smi; for everything else (Mesa/AMD/Intel open-source stack) report
+# the Mesa/OpenGL version via glxinfo if available, since there's no single
+# "driver version" file that works across vendors.
+get_gpu_driver() {
+    local driver=""
+
+    if command -v nvidia-smi >/dev/null 2>&1; then
+        driver="$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -n1)"
+    fi
+
+    if [ -z "$driver" ] && command -v glxinfo >/dev/null 2>&1; then
+        driver="$(glxinfo 2>/dev/null | awk -F': ' '/^OpenGL version string/ {print $2; exit}')"
+    fi
+
+    [ -z "$driver" ] && driver="unknown"
+    echo "$driver"
+}
+
+# ==================== Install Paths ====================
+# /usr/local is the normal home. On read-only-root systems (SteamOS, NixOS,
+# MicroOS, ...) it isn't writable, so fall back to a path under /var, which
+# is persistent and writable on all of them. Non-root callers (dry-run,
+# status, detect) always see the default so output is stable.
+init_paths() {
+    if [ -n "${KAT_PREFIX:-}" ]; then
+        PREFIX="$KAT_PREFIX"
+    elif [ "$(id -u)" -eq 0 ] && ! _dir_writable /usr/local; then
+        PREFIX="/var/lib/kernel-autotune/prefix"
+    else
+        PREFIX="/usr/local"
+    fi
+    BIN_DIR="$PREFIX/bin"
+    LIB_DIR="$PREFIX/lib/kernel-autotune"
+    ZRAM_SCRIPT="$BIN_DIR/kernel-autotune-zram.sh"
+    CANONICAL_ZRAM_IMPL="$LIB_DIR/zram-impl.sh"
+}
+
+
+# ==================== Configuration Generation ====================
+generate_config() {
+    mkdir -p "$WORKDIR"
+
+    local KERNEL
+    KERNEL=$(detect_kernel)
+    local DEVICE_TYPE="desktop"
+    local RAM_MB
+    RAM_MB=$(get_ram_mb)
+    local CPU_CORES
+    CPU_CORES=$(get_cpu_cores)
+    local HAS_SSD
+    HAS_SSD=$(has_ssd)
+    local IS_NUMA
+    IS_NUMA=$(is_numa_system && echo 1 || echo 0)
+    # Fix #45: Persist HAS_THERMAL alongside all other detected values.
+    local HAS_THERMAL
+    HAS_THERMAL=$(has_thermal_control && echo 1 || echo 0)
+
+    # v2.4: distro / kernel-capability detection. These select profiles and
+    # adaptations below and are persisted so sentry (and humans) can see what
+    # was detected without re-deriving it.
+    local DISTRO_ID DISTRO_FAMILY INIT_SYSTEM KERNEL_MM PREEMPT_MODEL
+    local ZRAM_MANAGER POWER_MANAGER HAS_PSI CGROUP_VERSION IS_CONTAINER
+    DISTRO_ID=$(detect_distro_id)
+    DISTRO_FAMILY=$(detect_distro_family)
+    INIT_SYSTEM=$(detect_init_system)
+    KERNEL_MM=$(get_kernel_mm)
+    PREEMPT_MODEL=$(get_preempt_model)
+    ZRAM_MANAGER=$(detect_zram_manager)
+    POWER_MANAGER=$(detect_power_manager)
+    HAS_PSI=$(has_psi && echo 1 || echo 0)
+    CGROUP_VERSION=$(get_cgroup_version)
+    IS_CONTAINER=$(is_container && echo 1 || echo 0)
+
+    # Identification/info fields — descriptive only, never feed tuning logic.
+    local HOSTNAME_VAL DISTRO_VAL KERNEL_VERSION_VAL CPU_MODEL_VAL GPU_MODEL_VAL GPU_DRIVER_VAL
+    HOSTNAME_VAL=$(get_hostname)
+    DISTRO_VAL=$(get_distro)
+    KERNEL_VERSION_VAL=$(get_kernel_version)
+    CPU_MODEL_VAL=$(get_cpu_model)
+    GPU_MODEL_VAL=$(get_gpu_model)
+    GPU_DRIVER_VAL=$(get_gpu_driver)
+
+    # Determine device type
+    if is_handheld; then
+        DEVICE_TYPE="handheld"
+    elif is_laptop; then
+        DEVICE_TYPE="laptop"
+    fi
+
+    log "Detected: $DISTRO_ID ($DISTRO_FAMILY), $KERNEL kernel $KERNEL_MM, $DEVICE_TYPE," \
+        "${RAM_MB}MB RAM, $CPU_CORES cores, SSD=$HAS_SSD, NUMA=$IS_NUMA, THERMAL=$HAS_THERMAL"
+    verbose "Host: $HOSTNAME_VAL | Distro: $DISTRO_VAL | Kernel version: $KERNEL_VERSION_VAL"
+    verbose "Init: $INIT_SYSTEM | cgroup: $CGROUP_VERSION | PSI: $HAS_PSI | preempt: $PREEMPT_MODEL | container: $IS_CONTAINER"
+    verbose "zram manager: $ZRAM_MANAGER | power manager: $POWER_MANAGER"
+    verbose "CPU: $CPU_MODEL_VAL"
+    verbose "GPU: $GPU_MODEL_VAL (driver: $GPU_DRIVER_VAL)"
+
+    # ==================== Base Defaults ====================
+    SWAPPINESS=15
+    DIRTY_RATIO=15
+    DIRTY_BG_RATIO=5
+    VFS_CACHE_PRESSURE=60
+    CPU_GOVERNOR="schedutil"
+    THP="madvise"
+    ZRAM_ENABLED=1
+    ZRAM_RATIO=50
+    ZRAM_ALGO="zstd"
+    ZSWAP_ENABLED=0
+    NUMA_BALANCING=1
+    COMPACT_UNEVICTABLE=1
+    IO_SCHEDULER_SSD="mq-deadline"
+    IO_SCHEDULER_HDD="bfq"
+    # v2.4: policies for coexisting with other tools (see detect_zram_manager /
+    # detect_power_manager). Editable in config.sh.
+    #   ZRAM_EXTERNAL_POLICY: takeover = reconfigure zram devices even if another
+    #                         tool created them (previous behaviour);
+    #                         defer    = leave an externally-managed zram alone.
+    #   CPU_TUNING_POLICY:    auto  = skip governor/EPP tuning when TLP,
+    #                                 auto-cpufreq or tuned manage it;
+    #                         force = always apply; off = never apply.
+    ZRAM_EXTERNAL_POLICY="takeover"
+    CPU_TUNING_POLICY="auto"
+    #   AUTO_REGEN: 1 = re-tune automatically (backing up this file) when the
+    #               kernel flavor, distro or device type changes; 0 = warn only.
+    AUTO_REGEN=1
+    _preserve_policy   # user intent survives regen-config / auto re-tune
+
+    # Fix #36/#37: Probe actual kernel support before committing to BBR/fq.
+    TCP_CONGESTION=$(get_tcp_congestion "bbr" "cubic")
+    NET_QDISC=$(get_net_qdisc "$TCP_CONGESTION")
+
+    # ==================== Kernel-Specific Tuning ====================
+    case "$KERNEL" in
+        xanmod)
+            SWAPPINESS=10
+            DIRTY_RATIO=20
+            CPU_GOVERNOR="performance"
+            THP="madvise"
+            ZRAM_ALGO="zstd"
+            TCP_CONGESTION=$(get_tcp_congestion "bbr" "cubic")
+            NET_QDISC=$(get_net_qdisc "$TCP_CONGESTION")
+            ;;
+        liquorix|zen|cachyos|fsync)
+            SWAPPINESS=20
+            DIRTY_RATIO=15
+            CPU_GOVERNOR="schedutil"
+            ZRAM_RATIO=60
+            ;;
+        tkg)
+            SWAPPINESS=12
+            CPU_GOVERNOR="performance"
+            ZRAM_RATIO=55
+            ;;
+        ck|clear)
+            SWAPPINESS=8
+            CPU_GOVERNOR="performance"
+            DIRTY_RATIO=10
+            ;;
+        rt)
+            # PREEMPT_RT: latency determinism beats throughput. Keep clocks up,
+            # avoid anything that introduces jitter (THP compaction, NUMA
+            # balancing faults, slow compressors).
+            SWAPPINESS=10
+            CPU_GOVERNOR="performance"
+            THP="never"
+            ZRAM_ALGO="lz4"
+            ;;
+        lowlatency)
+            SWAPPINESS=10
+            CPU_GOVERNOR="performance"
+            THP="madvise"
+            ;;
+        hardened)
+            # Hardening kernels: stay with conservative, well-trodden settings.
+            SWAPPINESS=15
+            CPU_GOVERNOR="schedutil"
+            THP="madvise"
+            ;;
+        lts)
+            SWAPPINESS=15
+            CPU_GOVERNOR="schedutil"
+            THP="madvise"
+            ;;
+        cloud)
+            # Guest kernels: the hypervisor owns frequency scaling and the
+            # block scheduler; keep memory behaviour sensible.
+            SWAPPINESS=10
+            CPU_GOVERNOR="schedutil"
+            THP="madvise"
+            ;;
+        proxmox)
+            # Hypervisor host: Proxmox's own guidance is a low swappiness so
+            # guest memory isn't pushed out in favour of cache.
+            SWAPPINESS=10
+            CPU_GOVERNOR="schedutil"
+            THP="madvise"
+            ;;
+        wsl)
+            # WSL2's kernel has no zram/zswap modules and no cpufreq.
+            SWAPPINESS=15
+            ZRAM_ENABLED=0
+            ;;
+        rpi)
+            # SD-card based: write less, flush sooner (applied after RAM tiers
+            # below via DIRTY_RATIO), and lz4 is cheap on small ARM cores.
+            SWAPPINESS=15
+            CPU_GOVERNOR="schedutil"
+            ZRAM_ALGO="lz4"
+            ;;
+        asahi|generic)
+            SWAPPINESS=15
+            CPU_GOVERNOR="schedutil"
+            THP="defer+madvise"
+            ;;
+    esac
+
+    # ==================== RAM-Based Adjustments ====================
+    # Fix #39: Run RAM adjustments BEFORE device-type adjustments so that
+    # device-type settings (e.g. handheld ZRAM_RATIO=100) take final precedence.
+    if [ "$RAM_MB" -le 2048 ]; then
+        ZRAM_ENABLED=1
+        ZRAM_RATIO=150
+        ZSWAP_ENABLED=0
+        SWAPPINESS=30
+        VFS_CACHE_PRESSURE=80
+    elif [ "$RAM_MB" -le 4096 ]; then
+        ZRAM_ENABLED=1
+        ZRAM_RATIO=100
+        ZSWAP_ENABLED=0
+        SWAPPINESS=25
+    elif [ "$RAM_MB" -le 8192 ]; then
+        ZRAM_ENABLED=1
+        ZRAM_RATIO=75
+        ZSWAP_ENABLED=1
+    elif [ "$RAM_MB" -le 16384 ]; then
+        ZRAM_RATIO=50
+    else
+        ZRAM_RATIO=30
+        SWAPPINESS=5
+    fi
+
+    # Kernels with no zram support (WSL, containers) must never be switched
+    # back on by the RAM tiers above.
+    if [ "$KERNEL" = "wsl" ] || [ "$IS_CONTAINER" -eq 1 ]; then
+        ZRAM_ENABLED=0
+        ZSWAP_ENABLED=0
+    fi
+
+    # ==================== Device Type Adjustments ====================
+    # (Runs after RAM so device-type settings win on conflict — fix #39)
+    case "$DEVICE_TYPE" in
+        handheld)
+            CPU_GOVERNOR="schedutil"
+            SWAPPINESS=25
+            ZRAM_RATIO=100
+            ZRAM_ALGO="lz4"
+            THP="never"
+            DIRTY_RATIO=10
+            ;;
+        laptop)
+            CPU_GOVERNOR="schedutil"
+            SWAPPINESS=$((SWAPPINESS + 5))
+            ZRAM_ALGO="lz4"
+            if [ "$HAS_THERMAL" -eq 1 ] && [ "$KERNEL" != "rt" ]; then
+                THP="defer+madvise"
+            fi
+            ;;
+        desktop)
+            # Keep optimized settings from kernel/RAM defaults.
+            ;;
+    esac
+
+    # ==================== NUMA Adjustments ====================
+    if [ "$IS_NUMA" -eq 1 ]; then
+        NUMA_BALANCING=1
+        VFS_CACHE_PRESSURE=50
+    else
+        NUMA_BALANCING=0
+    fi
+    # Balancing works by inducing page faults; that is exactly the jitter an
+    # RT kernel is chosen to avoid.
+    if [ "$KERNEL" = "rt" ]; then
+        NUMA_BALANCING=0
+    fi
+
+    # ==================== SSD Optimizations ====================
+    if [ "$HAS_SSD" -eq 1 ]; then
+        DIRTY_RATIO=20
+        DIRTY_BG_RATIO=10
+        IO_SCHEDULER_SSD="none"
+    fi
+    # SD cards (Raspberry Pi) report non-rotational but hate large write
+    # bursts; keep the flush window small regardless of the SSD tweak above.
+    if [ "$KERNEL" = "rpi" ]; then
+        DIRTY_RATIO=10
+        DIRTY_BG_RATIO=5
+    fi
+
+    # ==================== zram / zswap consistency ====================
+    # Enabling both double-compresses pages (setup_zswap refuses anyway).
+    # The 4-8GB tier used to generate ZRAM_ENABLED=1 *and* ZSWAP_ENABLED=1,
+    # producing a "ZSWAP skipped" warning on every boot. Prefer zram.
+    if [ "$ZRAM_ENABLED" -eq 1 ]; then
+        ZSWAP_ENABLED=0
+    fi
+
+    # Fix #40: Derive writeback timings from dirty ratio for internal consistency.
+    # dirty_expire_centisecs: how long data sits dirty before forced writeout.
+    # dirty_writeback_centisecs: how often the writeback thread wakes.
+    # Keep expire >= 2× writeback. Scale both with DIRTY_RATIO.
+    DIRTY_WRITEBACK_CS=$(( 500 + DIRTY_RATIO * 50 ))   # 1000-2500cs range
+    DIRTY_EXPIRE_CS=$(( DIRTY_WRITEBACK_CS * 2 ))
+
+    # ==================== Write Configuration ====================
+    # Fix #44: Sanitize values that come from external sources before writing
+    # them into a file that will be sourced as shell code.
+    _sanitize() {
+        # Allow only alphanumerics, hyphen, underscore, dot, plus.
+        echo "$1" | tr -cd 'a-zA-Z0-9_.+-'
+    }
+    # Descriptive free-text fields (hostname, distro, CPU/GPU model strings)
+    # legitimately contain spaces, commas, parens, colons — e.g.
+    # "AMD Ryzen 7 2700 Eight-Core Processor" or "NVIDIA RTX 2060, REV. A".
+    # Strip only characters that would break the shell-sourced config file
+    # (backticks, $, double-quotes, backslash, single-quotes, newlines)
+    # while keeping the rest, including digits.
+    # NOTE: a literal single-quote can't be written directly inside a
+    # single-quoted tr argument, and '\x27' is NOT an escape tr understands
+    # (tr reads it as the literal characters \,x,2,7 — which silently
+    # deletes every '2' and '7' in the input, e.g. turning "24.04" into
+    # "4.04"). Build the single-quote via printf's octal escape instead.
+    local _SQ
+    _SQ="$(printf '\47')"
+    _sanitize_text() {
+        echo "$1" | tr -d "\`\$\\\\\"${_SQ}" | tr '\n\r' '  ' | sed -e 's/[[:space:]]*$//' | head -c 256
+    }
+    KERNEL=$(_sanitize "$KERNEL")
+    DEVICE_TYPE=$(_sanitize "$DEVICE_TYPE")
+    ZRAM_ALGO=$(_sanitize "$ZRAM_ALGO")
+    CPU_GOVERNOR=$(_sanitize "$CPU_GOVERNOR")
+    THP=$(_sanitize "$THP")
+    TCP_CONGESTION=$(_sanitize "$TCP_CONGESTION")
+    NET_QDISC=$(_sanitize "$NET_QDISC")
+    IO_SCHEDULER_SSD=$(_sanitize "$IO_SCHEDULER_SSD")
+    IO_SCHEDULER_HDD=$(_sanitize "$IO_SCHEDULER_HDD")
+    DISTRO_ID=$(_sanitize "$DISTRO_ID")
+    DISTRO_FAMILY=$(_sanitize "$DISTRO_FAMILY")
+    INIT_SYSTEM=$(_sanitize "$INIT_SYSTEM")
+    KERNEL_MM=$(_sanitize "$KERNEL_MM")
+    PREEMPT_MODEL=$(_sanitize "$PREEMPT_MODEL")
+    ZRAM_MANAGER=$(_sanitize "$ZRAM_MANAGER")
+    POWER_MANAGER=$(_sanitize "$POWER_MANAGER")
+    CGROUP_VERSION=$(_sanitize "$CGROUP_VERSION")
+    HOSTNAME_VAL=$(_sanitize_text "$HOSTNAME_VAL")
+    DISTRO_VAL=$(_sanitize_text "$DISTRO_VAL")
+    KERNEL_VERSION_VAL=$(_sanitize_text "$KERNEL_VERSION_VAL")
+    CPU_MODEL_VAL=$(_sanitize_text "$CPU_MODEL_VAL")
+    GPU_MODEL_VAL=$(_sanitize_text "$GPU_MODEL_VAL")
+    GPU_DRIVER_VAL=$(_sanitize_text "$GPU_DRIVER_VAL")
+
+    cat > "$CONFIG_FILE" <<EOF
+# kernel-autotune configuration — generated from hardware detection.
+# This file is YOURS to edit. Changes persist across reboots and apply runs.
+#
+# To apply your changes now:   sudo kernel-autotune apply
+# To reset to detected defaults: sudo kernel-autotune regen-config
+#
+# Generated: $(date)
+# Script version: $SCRIPT_VERSION
+# Distro: $DISTRO_ID ($DISTRO_FAMILY) | Kernel: $KERNEL $KERNEL_MM | Device: $DEVICE_TYPE | RAM: ${RAM_MB}MB | Cores: $CPU_CORES
+
+# Memory
+SWAPPINESS=$SWAPPINESS
+DIRTY_RATIO=$DIRTY_RATIO
+DIRTY_BG_RATIO=$DIRTY_BG_RATIO
+DIRTY_WRITEBACK_CS=$DIRTY_WRITEBACK_CS
+DIRTY_EXPIRE_CS=$DIRTY_EXPIRE_CS
+VFS_CACHE_PRESSURE=$VFS_CACHE_PRESSURE
+
+# CPU
+CPU_GOVERNOR="$CPU_GOVERNOR"
+THP="$THP"
+
+# Swap/Compression
+ZRAM_ENABLED=$ZRAM_ENABLED
+ZRAM_RATIO=$ZRAM_RATIO
+ZRAM_ALGO="$ZRAM_ALGO"
+ZSWAP_ENABLED=$ZSWAP_ENABLED
+
+# System
+NUMA_BALANCING=$NUMA_BALANCING
+COMPACT_UNEVICTABLE=$COMPACT_UNEVICTABLE
+
+# IO
+IO_SCHEDULER_SSD="$IO_SCHEDULER_SSD"
+IO_SCHEDULER_HDD="$IO_SCHEDULER_HDD"
+
+# Network
+TCP_CONGESTION="$TCP_CONGESTION"
+NET_QDISC="$NET_QDISC"
+
+# Coexistence policies (v2.4)
+#   ZRAM_EXTERNAL_POLICY: takeover | defer   (what to do if zram-generator / zram-tools /
+#                                             zram-config / zramen already manages zram)
+#   CPU_TUNING_POLICY:    auto | force | off (auto skips governor/EPP when TLP,
+#                                             auto-cpufreq or tuned manage the CPU)
+#   AUTO_REGEN:           1 | 0              (re-tune automatically when kernel flavor,
+#                                             distro or device type changes; backs this file up)
+ZRAM_EXTERNAL_POLICY="$ZRAM_EXTERNAL_POLICY"
+CPU_TUNING_POLICY="$CPU_TUNING_POLICY"
+AUTO_REGEN=$AUTO_REGEN
+
+# Detection results
+KERNEL="$KERNEL"
+DEVICE_TYPE="$DEVICE_TYPE"
+RAM_MB=$RAM_MB
+CPU_CORES=$CPU_CORES
+HAS_SSD=$HAS_SSD
+IS_NUMA=$IS_NUMA
+HAS_THERMAL=$HAS_THERMAL
+
+# Distro / kernel capability detection (v2.4)
+DISTRO_ID="$DISTRO_ID"
+DISTRO_FAMILY="$DISTRO_FAMILY"
+INIT_SYSTEM="$INIT_SYSTEM"
+KERNEL_MM="$KERNEL_MM"
+PREEMPT_MODEL="$PREEMPT_MODEL"
+CGROUP_VERSION="$CGROUP_VERSION"
+HAS_PSI=$HAS_PSI
+IS_CONTAINER=$IS_CONTAINER
+ZRAM_MANAGER="$ZRAM_MANAGER"
+POWER_MANAGER="$POWER_MANAGER"
+
+# System identification (informational only — never feeds tuning decisions)
+HOSTNAME_VAL="$HOSTNAME_VAL"
+DISTRO_VAL="$DISTRO_VAL"
+KERNEL_VERSION_VAL="$KERNEL_VERSION_VAL"
+CPU_MODEL_VAL="$CPU_MODEL_VAL"
+GPU_MODEL_VAL="$GPU_MODEL_VAL"
+GPU_DRIVER_VAL="$GPU_DRIVER_VAL"
+EOF
+
+    # Fix #29 (reworked in v2.4): state.json is now produced by one writer,
+    # write_state_json(), shared with apply_all. It reads the variables in
+    # scope here, passes free text through the environment (never interpolated
+    # into code) and falls back to a pure-bash writer when python3 is absent —
+    # previously a missing python3 aborted config generation under `set -e`.
+    write_state_json "" "" "" ""
+
+    log "Configuration generated and saved (version $SCRIPT_VERSION)"
+}
+
+
+# ==================== Config Validation & Migration ====================
+# (In --dry-run, apply_all points CONFIG_FILE at a scratch copy, so migration
+# below can never modify the real config.)
+# Validates config.sh before sourcing it. For keys that are missing but can be
+# re-detected at runtime (detection results like HAS_THERMAL, IS_NUMA, etc.),
+# they are appended to the config automatically rather than failing the boot.
+# Only truly required tuning keys (user-editable settings) cause a hard failure.
+validate_config() {
+    if [ ! -f "$CONFIG_FILE" ]; then
+        error "Config file not found: $CONFIG_FILE — run 'kernel-autotune regen-config' to create it"
+    fi
+
+    # Syntax check first — a broken file is always fatal
+    if ! bash -n "$CONFIG_FILE" 2>/dev/null; then
+        error "Config file has a syntax error: $CONFIG_FILE
+Run 'kernel-autotune regen-config' to reset it, or fix the error manually."
+    fi
+
+    # Keys are split into two categories:
+    #   required   — user-editable tuning settings; must be present to apply safely
+    #   detectable — hardware/kernel detection results; can be re-detected and appended
+    local required_keys=(
+        SWAPPINESS DIRTY_RATIO DIRTY_BG_RATIO VFS_CACHE_PRESSURE
+        CPU_GOVERNOR THP
+        ZRAM_ENABLED ZRAM_RATIO ZRAM_ALGO ZSWAP_ENABLED
+        NUMA_BALANCING COMPACT_UNEVICTABLE
+        IO_SCHEDULER_SSD IO_SCHEDULER_HDD
+        TCP_CONGESTION NET_QDISC
+    )
+    local detectable_keys=(
+        KERNEL DEVICE_TYPE RAM_MB CPU_CORES HAS_SSD IS_NUMA HAS_THERMAL
+        HOSTNAME_VAL DISTRO_VAL KERNEL_VERSION_VAL CPU_MODEL_VAL GPU_MODEL_VAL GPU_DRIVER_VAL
+        DIRTY_WRITEBACK_CS DIRTY_EXPIRE_CS
+        DISTRO_ID DISTRO_FAMILY INIT_SYSTEM KERNEL_MM PREEMPT_MODEL CGROUP_VERSION
+        HAS_PSI IS_CONTAINER ZRAM_MANAGER POWER_MANAGER
+        ZRAM_EXTERNAL_POLICY CPU_TUNING_POLICY AUTO_REGEN
+    )
+
+    # Check for missing keys by sourcing into a subshell
+    local missing_required=()
+    local missing_detectable=()
+
+    for key in "${required_keys[@]}"; do
+        if ! bash -c "source \"$CONFIG_FILE\" 2>/dev/null && [ -n \"\${${key}+x}\" ]" 2>/dev/null; then
+            missing_required+=("$key")
+        fi
+    done
+    for key in "${detectable_keys[@]}"; do
+        if ! bash -c "source \"$CONFIG_FILE\" 2>/dev/null && [ -n \"\${${key}+x}\" ]" 2>/dev/null; then
+            missing_detectable+=("$key")
+        fi
+    done
+
+    # Hard failure for missing required keys — these can't be safely defaulted
+    if [ "${#missing_required[@]}" -gt 0 ]; then
+        error "Config file is missing required tuning keys: ${missing_required[*]}
+Edit $CONFIG_FILE to add them, or run 'kernel-autotune regen-config' to reset."
+    fi
+
+    # Auto-migrate missing detectable keys — re-detect and append to config
+    if [ "${#missing_detectable[@]}" -gt 0 ]; then
+        warn "Config is missing detection keys (likely from an older version): ${missing_detectable[*]}"
+        warn "Re-detecting and appending them to $CONFIG_FILE automatically..."
+
+        # Build the migration block as a variable first, so no stray output
+        # (log calls, subshell noise) ends up inside the config file.
+        #
+        # IMPORTANT: command substitution $(...) always strips trailing
+        # newlines. Concatenating multiple "migration_lines+=\"\$(printf
+        # '...\n')\"" calls therefore silently drops the newline between
+        # each entry, collapsing the entire appended block onto one
+        # physical line — which then becomes one giant shell comment, so
+        # NONE of the migrated variables actually get set when the config
+        # is later sourced (this was a real, previously-latent bug). Fix:
+        # explicitly append a literal newline ($'\n') after each captured
+        # value rather than relying on the substitution to carry it.
+        local migration_lines
+        migration_lines="$(printf '# Auto-migrated by kernel-autotune v%s on %s' "$SCRIPT_VERSION" "$(date)")"
+        migration_lines+=$'\n'
+
+        for key in "${missing_detectable[@]}"; do
+            local val="" quoted=0
+            case "$key" in
+                KERNEL)      val=$(detect_kernel) ;;
+                DEVICE_TYPE)
+                    if is_handheld; then val="handheld"
+                    elif is_laptop; then val="laptop"
+                    else val="desktop"; fi ;;
+                RAM_MB)      val=$(get_ram_mb) ;;
+                CPU_CORES)   val=$(get_cpu_cores) ;;
+                HAS_SSD)     val=$(has_ssd) ;;
+                IS_NUMA)     val=$(is_numa_system && echo 1 || echo 0) ;;
+                HAS_THERMAL) val=$(has_thermal_control && echo 1 || echo 0) ;;
+                HOSTNAME_VAL)       val=$(get_hostname);       quoted=1 ;;
+                DISTRO_VAL)         val=$(get_distro);         quoted=1 ;;
+                KERNEL_VERSION_VAL) val=$(get_kernel_version); quoted=1 ;;
+                CPU_MODEL_VAL)      val=$(get_cpu_model);      quoted=1 ;;
+                GPU_MODEL_VAL)      val=$(get_gpu_model);      quoted=1 ;;
+                GPU_DRIVER_VAL)     val=$(get_gpu_driver);     quoted=1 ;;
+                # v2.4 keys. Detection results are re-detected; the two policy
+                # keys are *tuning* settings added in 2.4, so they get the same
+                # defaults generate_config would pick (and old configs keep
+                # working without a hard failure on upgrade).
+                DISTRO_ID)       val=$(detect_distro_id);     quoted=1 ;;
+                DISTRO_FAMILY)   val=$(detect_distro_family); quoted=1 ;;
+                INIT_SYSTEM)     val=$(detect_init_system);   quoted=1 ;;
+                KERNEL_MM)       val=$(get_kernel_mm);        quoted=1 ;;
+                PREEMPT_MODEL)   val=$(get_preempt_model);    quoted=1 ;;
+                CGROUP_VERSION)  val=$(get_cgroup_version);   quoted=1 ;;
+                ZRAM_MANAGER)    val=$(detect_zram_manager);  quoted=1 ;;
+                POWER_MANAGER)   val=$(detect_power_manager); quoted=1 ;;
+                HAS_PSI)         val=$(has_psi && echo 1 || echo 0) ;;
+                IS_CONTAINER)    val=$(is_container && echo 1 || echo 0) ;;
+                ZRAM_EXTERNAL_POLICY) val="takeover"; quoted=1 ;;
+                CPU_TUNING_POLICY)    val="auto";     quoted=1 ;;
+                AUTO_REGEN)           val="1" ;;
+                DIRTY_WRITEBACK_CS|DIRTY_EXPIRE_CS)
+                    # Both are derived from DIRTY_RATIO using the same
+                    # formula generate_config uses. Computed independently
+                    # from DIRTY_RATIO here (not chained off each other's
+                    # loop-local $val) since migration order within
+                    # missing_detectable isn't guaranteed to have already
+                    # written DIRTY_WRITEBACK_CS into scope before
+                    # DIRTY_EXPIRE_CS is processed.
+                    if [ -z "${DIRTY_RATIO:-}" ]; then
+                        # required_keys validation runs after this
+                        # migration step, so if DIRTY_RATIO itself is also
+                        # missing, fall back to the same default
+                        # generate_config would pick for a typical desktop.
+                        _write_log "WARNING: DIRTY_RATIO missing while migrating $key; using fallback DIRTY_RATIO=20 for the calculation"
+                        local _dr=20
+                    else
+                        local _dr="$DIRTY_RATIO"
+                    fi
+                    local _wcs=$(( 500 + _dr * 50 ))
+                    if [ "$key" = "DIRTY_WRITEBACK_CS" ]; then
+                        val="$_wcs"
+                    else
+                        val=$(( _wcs * 2 ))
+                    fi
+                    ;;
+                *)           val="0" ;;
+            esac
+            # Free-text fields contain spaces/punctuation and must be quoted
+            # when written back into the shell-sourced config file. Use the
+            # same digit-safe sanitization as _sanitize_text in generate_config
+            # (see the comment there about the \x27-in-tr pitfall).
+            if [ "$quoted" -eq 1 ]; then
+                local _sq
+                _sq="$(printf '\47')"
+                val="$(echo "$val" | tr -d "\`\$\\\\\"${_sq}" | tr '\n\r' '  ' | sed -e 's/[[:space:]]*$//' | head -c 256)"
+                migration_lines+="$(printf '%s="%s"' "$key" "$val")"
+            else
+                migration_lines+="$(printf '%s=%s' "$key" "$val")"
+            fi
+            migration_lines+=$'\n'
+            # Log to file only (not stdout) so it doesn't pollute the config
+            _write_log "Migrated: ${key}=${val}"
+        done
+
+        # Append the clean key=value lines to the config file. Each line
+        # already ends in a real newline (added above), and migration_lines
+        # itself begins with the "# Auto-migrated..." comment line, so this
+        # produces one well-formed block — printf '%s\n' would add an extra
+        # blank line at the end, which is harmless but unnecessary; use a
+        # plain leading blank line instead for visual separation from the
+        # preceding config content.
+        printf '\n%s' "$migration_lines" >> "$CONFIG_FILE"
+
+        log "Config migration complete. Keys appended to $CONFIG_FILE."
+    fi
+
+    # Range/value sanity checks — catch obvious user errors in editable fields
+    local check
+    check=$(bash -c "source \"$CONFIG_FILE\" 2>/dev/null
+        [ \"\$SWAPPINESS\" -ge 0 ] && [ \"\$SWAPPINESS\" -le 200 ] \
+            || echo 'SWAPPINESS must be 0-200'
+        [ \"\$DIRTY_RATIO\" -ge 1 ] && [ \"\$DIRTY_RATIO\" -le 100 ] \
+            || echo 'DIRTY_RATIO must be 1-100'
+        [ \"\$DIRTY_BG_RATIO\" -ge 0 ] && [ \"\$DIRTY_BG_RATIO\" -le 100 ] \
+            || echo 'DIRTY_BG_RATIO must be 0-100'
+        [ \"\$ZRAM_RATIO\" -ge 0 ] && [ \"\$ZRAM_RATIO\" -le 300 ] \
+            || echo 'ZRAM_RATIO must be 0-300'
+        [[ \"\$ZRAM_ENABLED\" == '0' || \"\$ZRAM_ENABLED\" == '1' ]] \
+            || echo 'ZRAM_ENABLED must be 0 or 1'
+        [[ \"\$ZSWAP_ENABLED\" == '0' || \"\$ZSWAP_ENABLED\" == '1' ]] \
+            || echo 'ZSWAP_ENABLED must be 0 or 1'
+        [[ \"\$ZRAM_EXTERNAL_POLICY\" == 'takeover' || \"\$ZRAM_EXTERNAL_POLICY\" == 'defer' ]] \
+            || echo \"ZRAM_EXTERNAL_POLICY must be: takeover or defer (got: \$ZRAM_EXTERNAL_POLICY)\"
+        [[ \"\$CPU_TUNING_POLICY\" == 'auto' || \"\$CPU_TUNING_POLICY\" == 'force' \
+            || \"\$CPU_TUNING_POLICY\" == 'off' ]] \
+            || echo \"CPU_TUNING_POLICY must be: auto, force or off (got: \$CPU_TUNING_POLICY)\"
+        [[ \"\$AUTO_REGEN\" == '0' || \"\$AUTO_REGEN\" == '1' ]] \
+            || echo 'AUTO_REGEN must be 0 or 1'
+        [[ \"\$THP\" == 'always' || \"\$THP\" == 'madvise' \
+            || \"\$THP\" == 'never' || \"\$THP\" == 'defer+madvise' ]] \
+            || echo \"THP must be: always, madvise, defer+madvise, or never (got: \$THP)\"
+    " 2>/dev/null)
+
+    if [ -n "$check" ]; then
+        error "Config file has invalid values:
+$check
+
+Edit $CONFIG_FILE or run 'kernel-autotune regen-config' to reset."
+    fi
+
+    verbose "Config validated: $CONFIG_FILE"
+    return 0
+}
+
+# ==================== Sysctl Tuning ====================
+apply_sysctl() {
+    # Config has already been validated and sourced by apply_all before this is called.
+
+    local sysctl_content="" skipped=()
+    local swappiness="$SWAPPINESS"
+
+    # vm.swappiness only accepts values above 100 on kernels >= 5.8; older
+    # kernels reject the whole line.
+    if [ "$swappiness" -gt 100 ] && ! kernel_at_least 5 8; then
+        verbose "Kernel ${KERNEL_MM:-?} caps vm.swappiness at 100; clamping from $swappiness"
+        swappiness=100
+    fi
+
+    # Emit a "key = value" line only if this kernel has the key. Distro
+    # kernels differ in what they compile in (no NUMA balancing, no
+    # compaction, no BBR/fq, ...), and procps/busybox report an unknown key
+    # as an error — which used to flag the whole sysctl step as failed.
+    _sc() {
+        local key="$1" val="$2"
+        if [ -e "/proc/sys/${key//.//}" ]; then
+            sysctl_content+="$key = $val"$'\n'
+        else
+            skipped+=("$key")
+        fi
+    }
+    _sc_note() { sysctl_content+=$'\n'"# $1"$'\n'; }
+
+    _sc_note "Kernel"
+    _sc kernel.sysrq 16
+    _sc kernel.numa_balancing "$NUMA_BALANCING"
+    _sc kernel.panic 10
+    _sc kernel.panic_on_oops 1
+
+    _sc_note "Memory Management"
+    _sc vm.swappiness "$swappiness"
+    _sc vm.vfs_cache_pressure "$VFS_CACHE_PRESSURE"
+    _sc vm.dirty_ratio "$DIRTY_RATIO"
+    _sc vm.dirty_background_ratio "$DIRTY_BG_RATIO"
+    _sc vm.dirty_expire_centisecs "$DIRTY_EXPIRE_CS"
+    _sc vm.dirty_writeback_centisecs "$DIRTY_WRITEBACK_CS"
+    _sc vm.compact_unevictable_allowed "$COMPACT_UNEVICTABLE"
+    _sc vm.overcommit_memory 0
+
+    _sc_note "Network Performance"
+    _sc net.core.default_qdisc "$NET_QDISC"
+    _sc net.ipv4.tcp_congestion_control "$TCP_CONGESTION"
+    _sc net.ipv4.tcp_fastopen 3
+    _sc net.ipv4.tcp_rmem "4096 87380 16777216"
+    _sc net.ipv4.tcp_wmem "4096 65536 16777216"
+    _sc net.core.rmem_max 16777216
+    _sc net.core.wmem_max 16777216
+    _sc net.core.somaxconn 8192
+    _sc net.core.netdev_max_backlog 16384
+    _sc net.ipv4.tcp_slow_start_after_idle 0
+    _sc net.ipv4.tcp_mtu_probing 1
+    _sc net.ipv4.tcp_window_scaling 1
+
+    _sc_note "File System"
+    _sc fs.file-max 2097152
+    _sc fs.inotify.max_user_watches 524288
+    _sc fs.inotify.max_user_instances 1024
+
+    sysctl_content="# Kernel Autotune v${SCRIPT_VERSION} - $(date)
+# Profile: $KERNEL kernel (${KERNEL_MM:-?}) on $DEVICE_TYPE | ${DISTRO_ID:-unknown} (${DISTRO_FAMILY:-unknown})
+${sysctl_content%$'\n'}"
+
+    if [ "${#skipped[@]}" -gt 0 ]; then
+        verbose "Sysctl keys not present in this kernel, omitted: ${skipped[*]}"
+    fi
+
+    if [ "$DRY_RUN" = "1" ]; then
+        dry_run_notice "Would write $SYSCTL_CONF and run: sysctl -p $SYSCTL_CONF"
+        verbose "Sysctl content that would be written:"
+        echo "$sysctl_content" | sed 's/^/  [dry-run] /'
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$SYSCTL_CONF")"
+    echo "$sysctl_content" > "$SYSCTL_CONF"
+
+    # `sysctl -p FILE` is understood by procps-ng *and* busybox; the long
+    # `--load=FILE` form is procps-only (it fails on Alpine's busybox sysctl).
+    local out rc=0
+    out="$(sysctl -p "$SYSCTL_CONF" 2>&1)" || rc=$?
+    { printf '%s\n' "$out" >> "$LOG_FILE"; } 2>/dev/null || true
+    if [ "$LOG_LEVEL" -ge 2 ]; then echo "$out"; fi
+
+    if [ "$rc" -ne 0 ]; then
+        warn "Some sysctl settings failed (may be OK if kernel doesn't support them)"
+        echo "$out" | grep -iE 'error|cannot|invalid|permission|unknown' | head -n 3 | sed 's/^/  /' >&2 || true
+    else
+        log "Sysctl settings applied successfully"
+    fi
+}
+
+# ==================== ZRAM Setup ====================
+# The zram implementation lives in three places that must agree:
+#   1. the embedded copy below (so a single-file install always works),
+#   2. $CANONICAL_ZRAM_IMPL, written by `install` (and shipped by packages),
+#   3. the generated $ZRAM_SCRIPT with parameters baked in.
+# The on-disk canonical copy is only preferred when its IMPL-VERSION matches
+# ours, so a stale package can't silently downgrade behaviour.
+emit_zram_impl() {
+cat <<'KAT_ZRAM_IMPL_EOF'
+# kernel-autotune-zram.sh:BEGIN-IMPLEMENTATION
+# kernel-autotune-zram.sh:IMPL-VERSION=2.4
+set -uo pipefail
+# NOTE: deliberately not using `set -e` here — this script juggles several
+# independent per-device operations and needs to keep going (and report
+# accurately) even if one device fails, the same "best-effort, track
+# failures" philosophy kernel-autotune itself uses for its own steps.
+
+# systemd units and `su` (without -) don't always have the sbin dirs on PATH.
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin${PATH:+:$PATH}"
+
+NUM_DEVICES="${NUM_DEVICES:-1}"
+ZRAM_SIZE_MB="${ZRAM_SIZE_MB:-0}"
+ZRAM_ALGO="${ZRAM_ALGO:-lz4}"
+ZRAM_STRICT="${ZRAM_STRICT:-0}"
+ZRAM_DRY_RUN="${ZRAM_DRY_RUN:-0}"
+
+SELF_NAME="kernel-autotune-zram"
+
+_log() {
+    echo "[$SELF_NAME] $*"
+}
+
+_warn() {
+    echo "[$SELF_NAME] WARNING: $*" >&2
+}
+
+_err() {
+    echo "[$SELF_NAME] ERROR: $*" >&2
+}
+
+_dry() {
+    echo "[DRY RUN] $*"
+}
+
+# ---- Basic input validation ----
+if ! [[ "$NUM_DEVICES" =~ ^[0-9]+$ ]] || [ "$NUM_DEVICES" -lt 1 ]; then
+    _err "NUM_DEVICES must be a positive integer (got: $NUM_DEVICES)"
+    exit 1
+fi
+if ! [[ "$ZRAM_SIZE_MB" =~ ^[0-9]+$ ]] || [ "$ZRAM_SIZE_MB" -lt 1 ]; then
+    _err "ZRAM_SIZE_MB must be a positive integer (got: $ZRAM_SIZE_MB)"
+    exit 1
+fi
+
+PER_DEVICE_MB=$(( ZRAM_SIZE_MB / NUM_DEVICES ))
+[ "$PER_DEVICE_MB" -lt 32 ] && PER_DEVICE_MB=32
+PER_DEVICE_BYTES=$(( PER_DEVICE_MB * 1024 * 1024 ))
+
+# ---- Required userland tools ----
+# Missing tools are a distro-packaging problem (minimal containers, Alpine
+# without util-linux, ...). Say so plainly instead of failing per device.
+if [ "$ZRAM_DRY_RUN" != "1" ]; then
+    for _tool in mkswap swapon swapoff; do
+        if ! command -v "$_tool" >/dev/null 2>&1; then
+            _err "'$_tool' not found in PATH (install util-linux, or busybox swaps applets)"
+            exit 1
+        fi
+    done
+fi
+
+# ---- Ensure the zram kernel module is loaded ----
+# zram-control only appears once the module is loaded; on most distros the
+# module isn't loaded by default until something requests it. On kernels with
+# zram built in (some Alpine/embedded/Android-derived configs) the control
+# directory is already present and this block is skipped.
+if [ ! -d /sys/class/zram-control ]; then
+    if [ "$ZRAM_DRY_RUN" = "1" ]; then
+        _dry "Would run: modprobe zram"
+    else
+        if ! command -v modprobe >/dev/null 2>&1; then
+            _err "modprobe not found (install kmod) and zram is not built into this kernel."
+            exit 1
+        fi
+        if ! modprobe zram 2>/dev/null; then
+            _err "zram kernel module is not available on this system (modprobe zram failed)."
+            _err "ZRAM support may be disabled in this kernel (e.g. WSL), the running kernel's"
+            _err "modules may have been removed by an upgrade (reboot), or this is a container."
+            exit 1
+        fi
+        # Loading with no num_devices param creates zram0 by default on
+        # some kernels; that's fine, hot_add below handles the rest.
+    fi
+fi
+
+if [ "$ZRAM_DRY_RUN" = "1" ] && [ ! -d /sys/class/zram-control ]; then
+    _dry "zram-control sysfs not present in this environment; cannot simulate device creation further."
+    _dry "Would create $NUM_DEVICES zram device(s), ${PER_DEVICE_MB}MB each (${ZRAM_SIZE_MB}MB total), algo=$ZRAM_ALGO"
+    exit 0
+fi
+
+# ---- Algorithm resolution ----
+# The kernel only offers the compressors that were compiled in. zstd needs
+# kernel >= 4.19, lz4 needs CONFIG_CRYPTO_LZ4, and some trimmed kernels only
+# have lzo. Walk a fallback chain and use whatever this kernel really offers,
+# so "zstd requested" never silently becomes "nothing configured".
+_resolve_algo() {
+    # $1 = zram device name (e.g. zram0); echoes the algorithm to use
+    local dev="$1" avail want
+    avail=" $(tr -d '[]' < "/sys/block/$dev/comp_algorithm" 2>/dev/null | tr '\n' ' ') "
+    for want in "$ZRAM_ALGO" zstd lz4 lzo-rle lzo; do
+        if [[ "$avail" == *" $want "* ]]; then
+            echo "$want"
+            return 0
+        fi
+    done
+    echo "$ZRAM_ALGO"
+}
+
+# ---- Figure out which zram device numbers are already active as swap ----
+# We treat "already correctly configured" as: an active zram swap device
+# whose backing disksize matches what we'd set it to and whose compression
+# algorithm matches. This mirrors the idempotency check kernel-autotune's
+# setup_zram() already does at the aggregate level, but here we check
+# per-device so a partial reconfigure (e.g. NUM_DEVICES changed) doesn't
+# tear down devices that are still correctly sized.
+declare -a EXISTING_ZRAM_SWAP_DEVS=()
+while IFS= read -r line; do
+    dev="$(awk '{print $1}' <<<"$line")"
+    [[ "$dev" == /dev/zram* ]] || continue
+    EXISTING_ZRAM_SWAP_DEVS+=("${dev#/dev/}")
+done < <(grep '^/dev/zram' /proc/swaps 2>/dev/null || true)
+
+_device_matches() {
+    # $1 = zram device name (e.g. zram0)
+    local dev="$1"
+    local sys="/sys/block/$dev"
+    [ -d "$sys" ] || return 1
+    local cur_size cur_algo want_algo
+    cur_size="$(cat "$sys/disksize" 2>/dev/null || echo 0)"
+    # comp_algorithm reports the active algo wrapped in [brackets], e.g. "lzo lz4 [zstd]"
+    cur_algo="$(grep -o '\[[a-z0-9_-]*\]' "$sys/comp_algorithm" 2>/dev/null | tr -d '[]')"
+    # Compare against what this kernel would actually give us (after fallback),
+    # not the raw request — otherwise a zstd->lz4 fallback would look
+    # "mismatched" and get torn down and rebuilt on every apply.
+    want_algo="$(_resolve_algo "$dev")"
+    [ "$cur_size" -eq "$PER_DEVICE_BYTES" ] && [ "$cur_algo" = "$want_algo" ]
+}
+
+_device_in_use_elsewhere() {
+    # True if the device is mounted or used as a filesystem/other consumer
+    # (e.g. zram-backed /tmp from another tool). Swap use is handled separately.
+    local dev="$1"
+    grep -q "^/dev/$dev " /proc/mounts 2>/dev/null && return 0
+    [ -n "$(ls -A "/sys/block/$dev/holders" 2>/dev/null)" ] && return 0
+    return 1
+}
+
+CONFIGURED_COUNT=0
+FAILED_COUNT=0
+SKIPPED_COUNT=0
+
+# ---- Bring up exactly NUM_DEVICES devices ----
+for i in $(seq 0 $(( NUM_DEVICES - 1 ))); do
+    DEV="zram${i}"
+    SYS_PATH="/sys/block/$DEV"
+
+    # If this device already exists and is active swap with matching
+    # size/algo, leave it alone entirely (idempotent skip for this device).
+    if [[ " ${EXISTING_ZRAM_SWAP_DEVS[*]:-} " == *" $DEV "* ]] && _device_matches "$DEV"; then
+        SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
+        continue
+    fi
+
+    if [ "$ZRAM_DRY_RUN" = "1" ]; then
+        _dry "Would configure /dev/$DEV: ${PER_DEVICE_MB}MB, algo=$ZRAM_ALGO"
+        CONFIGURED_COUNT=$((CONFIGURED_COUNT + 1))
+        continue
+    fi
+
+    # If the device is active as swap but mismatched, take it down first.
+    if [[ " ${EXISTING_ZRAM_SWAP_DEVS[*]:-} " == *" $DEV "* ]]; then
+        swapoff "/dev/$DEV" 2>/dev/null || true
+    fi
+
+    # Create the underlying device node if it doesn't exist yet.
+    if [ ! -d "$SYS_PATH" ]; then
+        if [ -e /sys/class/zram-control/hot_add ]; then
+            # hot_add returns the index of the newly created device on
+            # stdout; we don't strictly need it since we're iterating by
+            # expected index, but reading it lets us detect failure.
+            if ! cat /sys/class/zram-control/hot_add >/dev/null 2>&1; then
+                _warn "Failed to hot-add a zram device for $DEV (hot_add write failed)"
+                FAILED_COUNT=$((FAILED_COUNT + 1))
+                [ "$ZRAM_STRICT" = "1" ] && exit 1
+                continue
+            fi
+        else
+            _warn "/sys/class/zram-control/hot_add not present; cannot create $DEV"
+            FAILED_COUNT=$((FAILED_COUNT + 1))
+            [ "$ZRAM_STRICT" = "1" ] && exit 1
+            continue
+        fi
+    fi
+
+    if [ ! -d "$SYS_PATH" ]; then
+        _warn "$DEV still not present after hot_add; skipping"
+        FAILED_COUNT=$((FAILED_COUNT + 1))
+        [ "$ZRAM_STRICT" = "1" ] && exit 1
+        continue
+    fi
+
+    # Another consumer (zram-backed /tmp, a filesystem, a device-mapper
+    # stack) owns this device. Resetting it would either fail or destroy
+    # someone else's data — leave it alone and say why.
+    if _device_in_use_elsewhere "$DEV"; then
+        _warn "$DEV is in use by something other than swap (mounted or held); skipping device"
+        FAILED_COUNT=$((FAILED_COUNT + 1))
+        [ "$ZRAM_STRICT" = "1" ] && exit 1
+        continue
+    fi
+
+    # Reset the device before reconfiguring — disksize/comp_algorithm can
+    # only be set while the device is not in use (0 = idle/uninitialized).
+    echo 1 > "$SYS_PATH/reset" 2>/dev/null || true
+    if [ "$(cat "$SYS_PATH/disksize" 2>/dev/null || echo 0)" != "0" ]; then
+        _warn "$DEV: could not be reset (still initialized/busy); skipping device"
+        FAILED_COUNT=$((FAILED_COUNT + 1))
+        [ "$ZRAM_STRICT" = "1" ] && exit 1
+        continue
+    fi
+
+    DEV_ALGO="$(_resolve_algo "$DEV")"
+    if [ "$DEV_ALGO" != "$ZRAM_ALGO" ]; then
+        _warn "$DEV: algorithm '$ZRAM_ALGO' not offered by this kernel, using '$DEV_ALGO'"
+    fi
+    if ! echo "$DEV_ALGO" > "$SYS_PATH/comp_algorithm" 2>/dev/null; then
+        _warn "$DEV: could not set compression algorithm '$DEV_ALGO'; skipping device"
+        FAILED_COUNT=$((FAILED_COUNT + 1))
+        [ "$ZRAM_STRICT" = "1" ] && exit 1
+        continue
+    fi
+
+    if ! echo "$PER_DEVICE_BYTES" > "$SYS_PATH/disksize" 2>/dev/null; then
+        _warn "$DEV: failed to set disksize to ${PER_DEVICE_MB}MB; skipping device"
+        FAILED_COUNT=$((FAILED_COUNT + 1))
+        [ "$ZRAM_STRICT" = "1" ] && exit 1
+        continue
+    fi
+
+    if ! mkswap "/dev/$DEV" >/dev/null 2>&1; then
+        _warn "$DEV: mkswap failed; skipping device"
+        FAILED_COUNT=$((FAILED_COUNT + 1))
+        [ "$ZRAM_STRICT" = "1" ] && exit 1
+        continue
+    fi
+
+    # Priority 100 puts zram swap well ahead of any disk-backed swap
+    # (default priority is much lower), so the kernel prefers it.
+    if ! swapon -p 100 "/dev/$DEV" >/dev/null 2>&1; then
+        _warn "$DEV: swapon failed; skipping device"
+        FAILED_COUNT=$((FAILED_COUNT + 1))
+        [ "$ZRAM_STRICT" = "1" ] && exit 1
+        continue
+    fi
+
+    CONFIGURED_COUNT=$((CONFIGURED_COUNT + 1))
+done
+
+# ---- Tear down any extra zram swap devices beyond NUM_DEVICES ----
+# (e.g. user lowered NUM_DEVICES via config + regen-config, or an external
+# manager such as zram-generator created devices we don't want)
+if [ "$ZRAM_DRY_RUN" != "1" ]; then
+    for dev in "${EXISTING_ZRAM_SWAP_DEVS[@]:-}"; do
+        [ -z "$dev" ] && continue
+        idx="${dev#zram}"
+        if [[ "$idx" =~ ^[0-9]+$ ]] && [ "$idx" -ge "$NUM_DEVICES" ]; then
+            swapoff "/dev/$dev" 2>/dev/null || true
+            if [ -e /sys/class/zram-control/hot_remove ]; then
+                echo "$idx" > /sys/class/zram-control/hot_remove 2>/dev/null || true
+            fi
+            _log "Removed extra device /dev/$dev (NUM_DEVICES decreased)"
+        fi
+    done
+fi
+
+_log "Configured: $CONFIGURED_COUNT, skipped (already correct): $SKIPPED_COUNT, failed: $FAILED_COUNT"
+
+if [ "$CONFIGURED_COUNT" -eq 0 ] && [ "$SKIPPED_COUNT" -eq 0 ]; then
+    _err "No zram devices were successfully configured"
+    exit 1
+fi
+
+exit 0
+KAT_ZRAM_IMPL_EOF
+}
+
+# Print the implementation body (everything after the BEGIN marker line).
+zram_impl_body() {
+    local begin='^# kernel-autotune-zram.sh:BEGIN-IMPLEMENTATION$'
+    local ver="^# kernel-autotune-zram.sh:IMPL-VERSION=${ZRAM_IMPL_VERSION}\$"
+    if [ -f "$CANONICAL_ZRAM_IMPL" ] && grep -q "$begin" "$CANONICAL_ZRAM_IMPL" 2>/dev/null \
+       && grep -q "$ver" "$CANONICAL_ZRAM_IMPL" 2>/dev/null; then
+        verbose "Using zram implementation from $CANONICAL_ZRAM_IMPL"
+        sed -n "/$begin/,\$p" "$CANONICAL_ZRAM_IMPL" | tail -n +2
+    else
+        if [ -f "$CANONICAL_ZRAM_IMPL" ]; then
+            verbose "$CANONICAL_ZRAM_IMPL is missing or a different version; using embedded implementation"
+        fi
+        emit_zram_impl | tail -n +2
+    fi
+}
+
+setup_zram() {
+    if [ "$ZRAM_ENABLED" -eq 0 ]; then return 0; fi
+
+    # Containers share the host kernel; swap/zram belongs to the host.
+    if [ "${IS_CONTAINER:-0}" -eq 1 ]; then
+        log "ZRAM skipped: running inside a container (host owns swap devices)"
+        return 0
+    fi
+
+    # Distros ship their own zram setup (Fedora/Arch/CachyOS: zram-generator,
+    # Debian: zram-tools, Ubuntu: zram-config, ...). Don't pretend it isn't there.
+    if [ "${ZRAM_MANAGER:-none}" != "none" ]; then
+        if [ "${ZRAM_EXTERNAL_POLICY:-takeover}" = "defer" ]; then
+            log "ZRAM left to $ZRAM_MANAGER (ZRAM_EXTERNAL_POLICY=defer)"
+            return 0
+        fi
+        log "ZRAM: $ZRAM_MANAGER is configured on this system; kernel-autotune takes over its devices" \
+            "(set ZRAM_EXTERNAL_POLICY=\"defer\" in $CONFIG_FILE to leave it alone)"
+    fi
+
+    local RAM_MB
+    RAM_MB=$(get_ram_mb)
+    local ZRAM_SIZE_MB=$(( RAM_MB * ZRAM_RATIO / 100 ))
+    local NUM_DEVICES
+    NUM_DEVICES=$(get_cpu_cores)
+
+    [ "$NUM_DEVICES" -gt 8 ] && NUM_DEVICES=8
+    [ "$NUM_DEVICES" -lt 1 ] && NUM_DEVICES=1
+
+    local REMAINDER=$(( ZRAM_SIZE_MB % NUM_DEVICES ))
+    if [ "$REMAINDER" -ne 0 ]; then
+        verbose "ZRAM: ${ZRAM_SIZE_MB}MB / ${NUM_DEVICES} devices leaves ${REMAINDER}MB unallocated"
+    fi
+
+    if [ -z "${ZRAM_ALGO:-}" ]; then
+        ZRAM_ALGO="lz4"
+        warn "ZRAM_ALGO was empty; defaulting to lz4"
+    fi
+
+    # ---- Idempotency check ----
+    # If active zram devices already match what we'd configure, skip teardown/rebuild.
+    local PER_DEVICE_MB=$(( ZRAM_SIZE_MB / NUM_DEVICES ))
+    [ "$PER_DEVICE_MB" -lt 32 ] && PER_DEVICE_MB=32
+    local EXPECTED_TOTAL_MB=$(( PER_DEVICE_MB * NUM_DEVICES ))
+
+    local active_count active_size_mb
+    active_count=$(awk '/zram/ {count++} END {print count+0}' /proc/swaps 2>/dev/null || echo 0)
+    active_size_mb=$(awk '/zram/ {sum+=$3} END {printf "%d", sum/1024}' /proc/swaps 2>/dev/null || echo 0)
+
+    if [ "$active_count" -eq "$NUM_DEVICES" ] && [ "$active_size_mb" -eq "$EXPECTED_TOTAL_MB" ]; then
+        verbose "ZRAM already configured: $active_count devices, ~${active_size_mb}MB active. Skipping rebuild."
+        log "ZRAM unchanged (idempotent skip)"
+        return 0
+    fi
+
+    if [ "$DRY_RUN" = "1" ]; then
+        dry_run_notice "Would configure ZRAM: $NUM_DEVICES devices," \
+                       "${EXPECTED_TOTAL_MB}MB total (${PER_DEVICE_MB}MB each), algo=$ZRAM_ALGO"
+        return 0
+    fi
+
+    # ---- Disable zswap before activating zram ----
+    if [ -f /sys/module/zswap/parameters/enabled ]; then
+        _sysfs_write "N" /sys/module/zswap/parameters/enabled || true
+        verbose "Disabled zswap before activating zram"
+    fi
+
+    # ---- Write the zram script with parameters baked in, then execute it ----
+    # $ZRAM_SCRIPT is regenerated on every apply; the implementation is
+    # spliced in from zram_impl_body (canonical file if current, embedded
+    # copy otherwise), on the BEGIN marker rather than a hardcoded line
+    # offset so editing the header can never silently break the splice.
+    mkdir -p "$(dirname "$ZRAM_SCRIPT")"
+    {
+        cat <<EOF
+#!/usr/bin/env bash
+# Generated by kernel-autotune v${SCRIPT_VERSION} on $(date)
+# Parameters are baked in; edit /etc/kernel-autotune/config.sh to change them.
+export NUM_DEVICES=$NUM_DEVICES
+export ZRAM_SIZE_MB=$ZRAM_SIZE_MB
+export ZRAM_ALGO="$ZRAM_ALGO"
+export ZRAM_STRICT=0
+export ZRAM_DRY_RUN=0
+EOF
+        zram_impl_body
+    } > "$ZRAM_SCRIPT"
+
+    chmod +x "$ZRAM_SCRIPT"
+    _label_executable "$ZRAM_SCRIPT"
+
+    if "$ZRAM_SCRIPT" 2>&1 | tee -a "$LOG_FILE"; then
+        log "ZRAM configured: $NUM_DEVICES devices, ${ZRAM_SIZE_MB}MB total"
+    else
+        warn "ZRAM setup encountered issues — check log for details"
+    fi
+}
+
+# ==================== ZSWAP Setup ====================
+setup_zswap() {
+    # Fix #20: Config already sourced by apply_all.
+    if [ "$ZSWAP_ENABLED" -eq 0 ]; then return 0; fi
+
+    if [ "$ZRAM_ENABLED" -eq 1 ]; then
+        warn "ZSWAP skipped: ZRAM is enabled. Enabling both simultaneously causes double-compression."
+        return 0
+    fi
+
+    if [ "$DRY_RUN" = "1" ]; then
+        dry_run_notice "Would enable zswap with algo=$ZRAM_ALGO (best available zpool, max_pool_percent=20)"
+        return 0
+    fi
+
+    if [ -d /sys/module/zswap ]; then
+        local p="/sys/module/zswap/parameters" c pool
+        _sysfs_write "Y" "$p/enabled" || true
+
+        # Compressor: configured algo first, then progressively more common ones.
+        for c in "$ZRAM_ALGO" zstd lz4 lzo; do
+            if _sysfs_write "$c" "$p/compressor"; then
+                [ "$c" != "$ZRAM_ALGO" ] && warn "ZSWAP: ${ZRAM_ALGO} unavailable, fell back to $c"
+                break
+            fi
+        done
+
+        # zpool: z3fold and zbud were removed from the kernel (6.15+), leaving
+        # zsmalloc only (and the "zpool" parameter itself is going away). Try
+        # them in order and only if the parameter exists on this kernel.
+        if [ -e "$p/zpool" ]; then
+            for pool in z3fold zbud zsmalloc; do
+                if _sysfs_write "$pool" "$p/zpool"; then
+                    verbose "ZSWAP: zpool=$pool"
+                    break
+                fi
+            done
+        fi
+        _sysfs_write 20 "$p/max_pool_percent" || true
+        log "ZSWAP enabled"
+    else
+        warn "ZSWAP requested but this kernel has no zswap support"
+    fi
+}
+
+# ==================== IO Scheduler ====================
+# Words of a queue/scheduler file with the [selected] brackets stripped.
+_sysfs_words() { tr -d '[]' < "$1" 2>/dev/null | tr '\n' ' '; }
+
+# Module that provides a given block scheduler (schedulers are often modules
+# that aren't loaded until requested: bfq, mq-deadline, kyber).
+_sched_module() {
+    case "$1" in
+        kyber) echo "kyber-iosched" ;;
+        *)     echo "$1" ;;
+    esac
+}
+
+tune_io_scheduler() {
+    local IFS=' '   # fallback chains below are space-separated words
+    local device dev_name is_rotational wanted chain s target current avail qf
+
+    for device in /sys/block/*; do
+        qf="$device/queue/scheduler"
+        [ -e "$qf" ] || continue
+
+        dev_name=$(basename "$device")
+
+        # Virtual / stacked / removable-media devices: not ours to tune.
+        case "$dev_name" in
+            loop*|zram*|sr*|dm-*|ram*|nbd*|md*|fd*) continue ;;
+        esac
+
+        is_rotational=$(cat "$device/queue/rotational" 2>/dev/null || echo 0)
+
+        # Fallback chains: whatever the config asks for, then something
+        # that exists on every blk-mq kernel. Distros differ in which
+        # schedulers they build in or as modules (bfq in particular).
+        if [ "$is_rotational" -eq 1 ]; then
+            wanted="$IO_SCHEDULER_HDD"
+        else
+            wanted="$IO_SCHEDULER_SSD"
+        fi
+        chain="$wanted mq-deadline none"
+
+        current="$(sed -n 's/.*\[\(.*\)\].*/\1/p' "$qf" 2>/dev/null || true)"
+        avail=" $(_sysfs_words "$qf") "
+
+        if [[ "$avail" != *" $wanted "* ]] && [ "$DRY_RUN" != "1" ] && command -v modprobe >/dev/null 2>&1; then
+            modprobe -q "$(_sched_module "$wanted")" 2>/dev/null || true
+            avail=" $(_sysfs_words "$qf") "
+        fi
+
+        target=""
+        for s in $chain; do
+            if [[ "$avail" == *" $s "* ]]; then target="$s"; break; fi
+        done
+        if [ -z "$target" ]; then
+            verbose "$dev_name: scheduler $wanted unavailable and no fallback found, skipping"
+            continue
+        fi
+        if [ "$target" != "$wanted" ]; then
+            verbose "$dev_name: scheduler $wanted not available, using $target"
+        fi
+        if [ "$current" = "$target" ]; then
+            verbose "$dev_name: scheduler already $target"
+            continue
+        fi
+
+        if [ "$DRY_RUN" = "1" ]; then
+            dry_run_notice "Would set $dev_name scheduler to $target"
+        elif _sysfs_write "$target" "$qf"; then
+            verbose "Set $dev_name scheduler to $target"
+        else
+            verbose "$dev_name: could not set scheduler to $target"
+        fi
+    done
+    if [ "$DRY_RUN" != "1" ]; then log "IO schedulers applied"; fi
+    return 0
+}
+
+# ==================== CPU Governor ====================
+# Governors offered depend on the cpufreq *driver*, not the distro:
+#   acpi-cpufreq / amd-pstate (passive,guided): schedutil, ondemand, ...
+#   intel_pstate (active), amd-pstate-epp:      only performance + powersave,
+#                                               with an EPP hint doing the
+#                                               work "schedutil" would.
+# Asking for schedutil there used to be skipped silently, leaving the
+# distro default in place. Resolve to what the driver really offers.
+_governor_chain() {
+    case "$1" in
+        performance) echo "performance" ;;
+        powersave)   echo "powersave" ;;
+        schedutil)   echo "schedutil ondemand conservative powersave" ;;
+        ondemand)    echo "ondemand schedutil conservative powersave" ;;
+        *)           echo "$1 schedutil ondemand powersave" ;;
+    esac
+}
+
+# Energy-performance preference matching a requested governor's intent.
+_epp_for() {
+    local requested="$1" on_battery="$2"
+    case "$requested" in
+        performance) echo "performance" ;;
+        *)
+            if [ "$on_battery" -eq 1 ]; then echo "balance_power"; else echo "balance_performance"; fi ;;
+    esac
+}
+
+# 1 if running on battery. Looks at every mains/USB-PD supply by *type*
+# instead of guessing names (AC, AC0, ACAD, ADP1, ucsi-source-psy-...).
+_on_battery() {
+    local ps type online seen=0 any_online=0
+    for ps in /sys/class/power_supply/*; do
+        [ -r "$ps/type" ] || continue
+        type="$(cat "$ps/type" 2>/dev/null || true)"
+        case "$type" in
+            Mains|USB) ;;
+            *) continue ;;
+        esac
+        online="$(cat "$ps/online" 2>/dev/null || echo 1)"
+        seen=1
+        [ "$online" = "1" ] && any_online=1
+    done
+    if [ "$seen" -eq 1 ] && [ "$any_online" -eq 0 ]; then echo 1; else echo 0; fi
+}
+
+tune_cpu_governor() {
+    local target="$CPU_GOVERNOR" on_battery=0
+
+    # ---- Coexist with other power managers ----
+    local skip_epp=0
+    case "${CPU_TUNING_POLICY:-auto}" in
+        off)
+            verbose "CPU tuning disabled (CPU_TUNING_POLICY=off)"
+            return 0 ;;
+        auto)
+            case "${POWER_MANAGER:-none}" in
+                tlp|auto-cpufreq|tuned)
+                    log "CPU governor left to ${POWER_MANAGER} (CPU_TUNING_POLICY=force to override)"
+                    return 0 ;;
+                power-profiles-daemon)
+                    # PPD owns the energy-performance preference; setting it
+                    # here would be overwritten the moment a profile changes.
+                    skip_epp=1 ;;
+            esac ;;
+    esac
+
+    if [ "$DEVICE_TYPE" = "laptop" ] || [ "$DEVICE_TYPE" = "handheld" ]; then
+        on_battery="$(_on_battery)"
+        if [ "$on_battery" -eq 1 ]; then
+            verbose "On battery — overriding CPU governor to schedutil"
+            target="schedutil"
+        fi
+    fi
+
+    if [ "$DRY_RUN" = "1" ]; then
+        dry_run_notice "Would set CPU governor to $target on all cores (driver: $(get_cpufreq_driver); resolved against what the driver offers)"
+        return 0
+    fi
+
+    local IFS=' '
+    local governor_set=0 chosen="" epp="" gov_file dir available g pol_chosen epp_file epp_avail want_epp
+    for gov_file in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+        [ -w "$gov_file" ] || continue
+        dir="$(dirname "$gov_file")"
+        available=" $(cat "$dir/scaling_available_governors" 2>/dev/null || echo "") "
+
+        pol_chosen=""
+        for g in $(_governor_chain "$target"); do
+            if [[ "$available" == *" $g "* ]]; then pol_chosen="$g"; break; fi
+        done
+        [ -n "$pol_chosen" ] || continue
+
+        if _sysfs_write "$pol_chosen" "$gov_file"; then
+            governor_set=1
+            chosen="$pol_chosen"
+        fi
+
+        # With an *-pstate driver the governor is only half the story.
+        epp_file="$dir/energy_performance_preference"
+        if [ "$skip_epp" -eq 0 ] && [ "$pol_chosen" = "powersave" ] && [ -w "$epp_file" ]; then
+            want_epp="$(_epp_for "$target" "$on_battery")"
+            epp_avail=" $(cat "$dir/energy_performance_available_preferences" 2>/dev/null || echo "") "
+            if [[ "$epp_avail" == *" $want_epp "* ]] && _sysfs_write "$want_epp" "$epp_file"; then
+                epp="$want_epp"
+            fi
+        fi
+    done
+
+    if [ "$governor_set" -eq 1 ]; then
+        if [ "$chosen" != "$target" ]; then
+            verbose "Governor $target not offered by $(get_cpufreq_driver); used $chosen"
+        fi
+        log "Set CPU governor to $chosen (driver: $(get_cpufreq_driver)${epp:+, EPP: $epp})"
+    else
+        verbose "No writable cpufreq governor found (VM, container or no cpufreq driver)"
+    fi
+    return 0
+}
+
+# ==================== Transparent Huge Pages ====================
+# "defer+madvise" is a value of the *defrag* knob, not of "enabled" (whose
+# only values are always/madvise/never) — writing it to "enabled" failed on
+# every generic-kernel machine. Map the combined setting onto both knobs, and
+# check what this kernel actually offers before writing.
+tune_thp() {
+    local base="/sys/kernel/mm/transparent_hugepage"
+    if [ ! -f "$base/enabled" ]; then
+        verbose "THP not available in this kernel"
+        return 0
+    fi
+
+    local want_enabled="$THP" want_defrag=""
+    if [ "$THP" = "defer+madvise" ]; then
+        want_enabled="madvise"
+        want_defrag="defer+madvise"
+    fi
+
+    if [ "$DRY_RUN" = "1" ]; then
+        dry_run_notice "Would set THP enabled=$want_enabled${want_defrag:+, defrag=$want_defrag}"
+        return 0
+    fi
+
+    local avail_enabled
+    avail_enabled=" $(_sysfs_words "$base/enabled") "
+    if [[ "$avail_enabled" != *" $want_enabled "* ]]; then
+        warn "THP: '$want_enabled' not supported by this kernel (offers:${avail_enabled% })"
+        return 0
+    fi
+
+    if _sysfs_write "$want_enabled" "$base/enabled"; then
+        log "Set THP to $want_enabled"
+    else
+        warn "Failed to set THP"
+    fi
+
+    if [ -n "$want_defrag" ] && [ -f "$base/defrag" ]; then
+        local avail_defrag
+        avail_defrag=" $(_sysfs_words "$base/defrag") "
+        if [[ "$avail_defrag" == *" $want_defrag "* ]]; then
+            _sysfs_write "$want_defrag" "$base/defrag" && verbose "Set THP defrag to $want_defrag" || true
+        else
+            verbose "THP defrag '$want_defrag' not offered by this kernel; leaving defrag unchanged"
+        fi
+    fi
+    return 0
+}
+
+# ==================== FSTRIM ====================
+FSTRIM_CRON_DIRS=(/etc/cron.weekly /etc/periodic/weekly)
+
+enable_fstrim() {
+    if [ "$HAS_SSD" -eq 0 ]; then return 0; fi
+
+    if [ "$DRY_RUN" = "1" ]; then
+        dry_run_notice "Would enable weekly fstrim for SSD maintenance (fstrim.timer on systemd, cron elsewhere)"
+        return 0
+    fi
+
+    if [ "${INIT_SYSTEM:-systemd}" = "systemd" ] && _unit_known fstrim.timer; then
+        if systemctl enable --now fstrim.timer 2>/dev/null; then
+            log "Enabled fstrim.timer for SSD maintenance"
+        fi
+        return 0
+    fi
+
+    # No systemd timer (Alpine/OpenRC, Void/runit, Gentoo, ...): use the
+    # distro's own periodic-job directory if it has one, and only if fstrim exists.
+    command -v fstrim >/dev/null 2>&1 || { verbose "fstrim not installed; skipping"; return 0; }
+    local d
+    for d in "${FSTRIM_CRON_DIRS[@]}"; do
+        if [ -d "$d" ]; then
+            if [ ! -e "$d/kernel-autotune-fstrim" ]; then
+                printf '#!/bin/sh\n# installed by kernel-autotune\nfstrim -a >/dev/null 2>&1 || true\n' > "$d/kernel-autotune-fstrim"
+                chmod +x "$d/kernel-autotune-fstrim"
+                log "Installed weekly fstrim job in $d"
+            fi
+            return 0
+        fi
+    done
+    verbose "No fstrim timer or periodic-job directory found; run 'fstrim -a' manually or schedule it"
+    return 0
+}
+
+# ==================== SELinux label ====================
+# On SELinux distros (Fedora/RHEL family) a script outside the standard bin
+# dirs gets a label systemd may not execute. Only matters for the /var
+# fallback prefix; /usr/local/bin inherits bin_t automatically.
+_label_executable() {
+    [ "$PREFIX" = "/usr/local" ] && return 0
+    command -v chcon >/dev/null 2>&1 || return 0
+    chcon -t bin_t "$1" 2>/dev/null || true
+    return 0
+}
+
+
+# ==================== State (state.json) ====================
+# state.json is the contract with other tools (notably sentryv3): it records
+# what was detected and what was configured, plus what is *actually in effect*
+# after the last apply. One writer, one field list, used by both
+# generate_config and apply_all. The lists below are the single source of
+# truth for its shape; sentry reads these keys.
+_STATE_TOP_STR="hostname distro distro_id distro_family init_system kernel kernel_version kernel_mm preempt_model device_type gpu_model gpu_driver cpu_model cgroup_version zram_manager power_manager"
+_STATE_TOP_INT="ram_mb cpu_cores has_ssd is_numa has_thermal has_psi is_container"
+_STATE_CFG_STR="cpu_governor thp zram_algo tcp_congestion net_qdisc io_scheduler_ssd io_scheduler_hdd zram_external_policy cpu_tuning_policy"
+_STATE_CFG_INT="swappiness dirty_ratio dirty_bg_ratio dirty_writeback_cs dirty_expire_cs vfs_cache_pressure zram_enabled zram_ratio zswap_enabled numa_balancing compact_unevictable auto_regen"
+_STATE_EFF_STR="cpu_governor cpufreq_driver cpu_epp thp_enabled thp_defrag io_schedulers zswap tcp_congestion"
+_STATE_EFF_INT="zram_devices zram_total_mb swappiness io_prio_effective"
+
+# Capture current config/detection variables into KAT_* environment variables.
+# Free text travels through the environment, never interpolated into code.
+_state_prepare() {
+    export KAT_T_hostname="${HOSTNAME_VAL:-unknown}"
+    export KAT_T_distro="${DISTRO_VAL:-unknown}"
+    export KAT_T_distro_id="${DISTRO_ID:-unknown}"
+    export KAT_T_distro_family="${DISTRO_FAMILY:-unknown}"
+    export KAT_T_init_system="${INIT_SYSTEM:-unknown}"
+    export KAT_T_kernel="${KERNEL:-unknown}"
+    export KAT_T_kernel_version="${KERNEL_VERSION_VAL:-unknown}"
+    export KAT_T_kernel_mm="${KERNEL_MM:-unknown}"
+    export KAT_T_preempt_model="${PREEMPT_MODEL:-unknown}"
+    export KAT_T_device_type="${DEVICE_TYPE:-unknown}"
+    export KAT_T_gpu_model="${GPU_MODEL_VAL:-unknown}"
+    export KAT_T_gpu_driver="${GPU_DRIVER_VAL:-unknown}"
+    export KAT_T_cpu_model="${CPU_MODEL_VAL:-unknown}"
+    export KAT_T_cgroup_version="${CGROUP_VERSION:-unknown}"
+    export KAT_T_zram_manager="${ZRAM_MANAGER:-none}"
+    export KAT_T_power_manager="${POWER_MANAGER:-none}"
+    export KAT_T_ram_mb="${RAM_MB:-0}"
+    export KAT_T_cpu_cores="${CPU_CORES:-0}"
+    export KAT_T_has_ssd="${HAS_SSD:-0}"
+    export KAT_T_is_numa="${IS_NUMA:-0}"
+    export KAT_T_has_thermal="${HAS_THERMAL:-0}"
+    export KAT_T_has_psi="${HAS_PSI:-0}"
+    export KAT_T_is_container="${IS_CONTAINER:-0}"
+
+    export KAT_C_cpu_governor="${CPU_GOVERNOR:-unknown}"
+    export KAT_C_thp="${THP:-unknown}"
+    export KAT_C_zram_algo="${ZRAM_ALGO:-unknown}"
+    export KAT_C_tcp_congestion="${TCP_CONGESTION:-unknown}"
+    export KAT_C_net_qdisc="${NET_QDISC:-unknown}"
+    export KAT_C_io_scheduler_ssd="${IO_SCHEDULER_SSD:-unknown}"
+    export KAT_C_io_scheduler_hdd="${IO_SCHEDULER_HDD:-unknown}"
+    export KAT_C_zram_external_policy="${ZRAM_EXTERNAL_POLICY:-takeover}"
+    export KAT_C_cpu_tuning_policy="${CPU_TUNING_POLICY:-auto}"
+    export KAT_C_swappiness="${SWAPPINESS:-0}"
+    export KAT_C_dirty_ratio="${DIRTY_RATIO:-0}"
+    export KAT_C_dirty_bg_ratio="${DIRTY_BG_RATIO:-0}"
+    export KAT_C_dirty_writeback_cs="${DIRTY_WRITEBACK_CS:-0}"
+    export KAT_C_dirty_expire_cs="${DIRTY_EXPIRE_CS:-0}"
+    export KAT_C_vfs_cache_pressure="${VFS_CACHE_PRESSURE:-0}"
+    export KAT_C_zram_enabled="${ZRAM_ENABLED:-0}"
+    export KAT_C_zram_ratio="${ZRAM_RATIO:-0}"
+    export KAT_C_zswap_enabled="${ZSWAP_ENABLED:-0}"
+    export KAT_C_numa_balancing="${NUMA_BALANCING:-0}"
+    export KAT_C_compact_unevictable="${COMPACT_UNEVICTABLE:-0}"
+    export KAT_C_auto_regen="${AUTO_REGEN:-1}"
+
+    export KAT_L_TOP_STR="$_STATE_TOP_STR" KAT_L_TOP_INT="$_STATE_TOP_INT"
+    export KAT_L_CFG_STR="$_STATE_CFG_STR" KAT_L_CFG_INT="$_STATE_CFG_INT"
+    export KAT_L_EFF_STR="$_STATE_EFF_STR" KAT_L_EFF_INT="$_STATE_EFF_INT"
+}
+
+# Live, post-apply facts: what the kernel is *actually* doing now, which can
+# differ from what was requested (unavailable governor, fallback scheduler...).
+collect_effective_state() {
+    local cpu0=/sys/devices/system/cpu/cpu0/cpufreq
+    local device dev_name sched io_list="" prio=0 zr_n zr_mb
+
+    for device in /sys/block/*; do
+        [ -e "$device/queue/scheduler" ] || continue
+        dev_name="$(basename "$device")"
+        case "$dev_name" in
+            loop*|zram*|sr*|dm-*|ram*|nbd*|md*|fd*) continue ;;
+        esac
+        sched="$(sed -n 's/.*\[\(.*\)\].*/\1/p' "$device/queue/scheduler" 2>/dev/null || true)"
+        [ -n "$sched" ] || continue
+        io_list+="${io_list:+ }${dev_name}=${sched}"
+        # ionice and the cgroup io.weight knob only do anything under BFQ
+        # (or iocost); with "none"/mq-deadline they're inert.
+        if [ "$sched" = "bfq" ]; then prio=1; fi
+    done
+
+    read -r zr_n zr_mb < <(awk '/zram/ {n++; s+=$3} END {printf "%d %d\n", n+0, s/1024}' /proc/swaps 2>/dev/null || echo "0 0")
+
+    export KAT_HAVE_EFFECTIVE=1
+    export KAT_E_cpu_governor; KAT_E_cpu_governor="$(cat "$cpu0/scaling_governor" 2>/dev/null || echo n/a)"
+    export KAT_E_cpufreq_driver; KAT_E_cpufreq_driver="$(get_cpufreq_driver)"
+    export KAT_E_cpu_epp; KAT_E_cpu_epp="$(cat "$cpu0/energy_performance_preference" 2>/dev/null || echo n/a)"
+    export KAT_E_thp_enabled; KAT_E_thp_enabled="$(sed -n 's/.*\[\(.*\)\].*/\1/p' /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true)"
+    [ -n "$KAT_E_thp_enabled" ] || KAT_E_thp_enabled="n/a"
+    export KAT_E_thp_defrag; KAT_E_thp_defrag="$(sed -n 's/.*\[\(.*\)\].*/\1/p' /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true)"
+    [ -n "$KAT_E_thp_defrag" ] || KAT_E_thp_defrag="n/a"
+    export KAT_E_io_schedulers="${io_list:-n/a}"
+    export KAT_E_zswap; KAT_E_zswap="$(cat /sys/module/zswap/parameters/enabled 2>/dev/null || echo n/a)"
+    export KAT_E_tcp_congestion; KAT_E_tcp_congestion="$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null || echo n/a)"
+    export KAT_E_zram_devices="${zr_n:-0}"
+    export KAT_E_zram_total_mb="${zr_mb:-0}"
+    export KAT_E_swappiness; KAT_E_swappiness="$(cat /proc/sys/vm/swappiness 2>/dev/null || echo 0)"
+    export KAT_E_io_prio_effective="$prio"
+}
+
+_json_str() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/ }"
+    s="${s//$'\t'/ }"
+    printf '"%s"' "$s"
+}
+
+# Pure-bash JSON emitter, used only when python3 is unavailable.
+_emit_group() {
+    local prefix="$1" strs="$2" ints="$3" ind="$4"
+    local IFS=' '
+    local k var v out="" sep=""
+    for k in $strs; do
+        var="${prefix}${k}"; v="${!var:-unknown}"
+        out+="${sep}${ind}\"$k\": $(_json_str "$v")"; sep=$',\n'
+    done
+    for k in $ints; do
+        var="${prefix}${k}"; v="${!var:-0}"
+        [[ "$v" =~ ^-?[0-9]+$ ]] || v=0
+        out+="${sep}${ind}\"$k\": $v"; sep=$',\n'
+    done
+    printf '%s' "$out"
+}
+
+_state_json_fallback() {
+    local applied="$1" failed="$2" complete="$3" duration="$4"
+    local IFS=' '
+    local a f jl_a="" jl_f="" sep="" cval dval
+    for a in $applied; do jl_a+="${sep}$(_json_str "$a")"; sep=", "; done
+    sep=""
+    for f in $failed; do jl_f+="${sep}$(_json_str "$f")"; sep=", "; done
+    case "$complete" in 1) cval="true" ;; 0) cval="false" ;; *) cval="null" ;; esac
+    if [[ "$duration" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then dval="$duration"; else dval="null"; fi
+
+    printf '{\n'
+    printf '  "script_version": %s,\n' "$(_json_str "$SCRIPT_VERSION")"
+    printf '  "last_updated": %s,\n' "$(_json_str "$(date -Iseconds 2>/dev/null || date)")"
+    printf '%s,\n' "$(_emit_group KAT_T_ "$KAT_L_TOP_STR" "$KAT_L_TOP_INT" "  ")"
+    printf '  "config": {\n%s\n  },\n' "$(_emit_group KAT_C_ "$KAT_L_CFG_STR" "$KAT_L_CFG_INT" "    ")"
+    if [ "${KAT_HAVE_EFFECTIVE:-0}" = "1" ]; then
+        printf '  "effective": {\n%s\n  },\n' "$(_emit_group KAT_E_ "$KAT_L_EFF_STR" "$KAT_L_EFF_INT" "    ")"
+    fi
+    printf '  "applied_steps": [%s],\n' "$jl_a"
+    printf '  "failed_steps": [%s],\n' "$jl_f"
+    printf '  "apply_complete": %s,\n' "$cval"
+    printf '  "last_apply_duration": %s\n' "$dval"
+    printf '}\n'
+}
+
+# write_state_json APPLIED_STEPS FAILED_STEPS APPLY_COMPLETE(0|1|"") DURATION("" = null)
+write_state_json() {
+    local applied="$1" failed="$2" complete="$3" duration="$4"
+    _state_prepare
+    mkdir -p "$(dirname "$STATE_FILE")"
+    # Write-then-rename so a reader (sentry) never sees a half-written file.
+    local tmp="${STATE_FILE}.tmp.$$"
+
+    local done_py=0
+    if command -v python3 >/dev/null 2>&1; then
+        if KAT_APPLIED="$applied" KAT_FAILED="$failed" KAT_COMPLETE="$complete" \
+           KAT_DURATION="$duration" KAT_VERSION="$SCRIPT_VERSION" \
+           KAT_NOW="$(date -Iseconds 2>/dev/null || date)" \
+           python3 - > "$tmp" 2>/dev/null <<'PYEOF'
+import json, os
+e = os.environ
+
+def group(prefix, strs, ints):
+    d = {}
+    for k in strs.split():
+        d[k] = e.get(prefix + k, "unknown")
+    for k in ints.split():
+        try:
+            d[k] = int(e.get(prefix + k, "0"))
+        except ValueError:
+            d[k] = 0
+    return d
+
+out = {"script_version": e["KAT_VERSION"], "last_updated": e["KAT_NOW"]}
+out.update(group("KAT_T_", e["KAT_L_TOP_STR"], e["KAT_L_TOP_INT"]))
+out["config"] = group("KAT_C_", e["KAT_L_CFG_STR"], e["KAT_L_CFG_INT"])
+if e.get("KAT_HAVE_EFFECTIVE") == "1":
+    out["effective"] = group("KAT_E_", e["KAT_L_EFF_STR"], e["KAT_L_EFF_INT"])
+out["applied_steps"] = e.get("KAT_APPLIED", "").split()
+out["failed_steps"] = e.get("KAT_FAILED", "").split()
+c = e.get("KAT_COMPLETE", "")
+out["apply_complete"] = None if c == "" else (c == "1")
+try:
+    out["last_apply_duration"] = float(e.get("KAT_DURATION", ""))
+except ValueError:
+    out["last_apply_duration"] = None
+print(json.dumps(out, indent=2))
+PYEOF
+        then
+            done_py=1
+        fi
+    fi
+    if [ "$done_py" -eq 0 ]; then
+        _state_json_fallback "$applied" "$failed" "$complete" "$duration" > "$tmp"
+    fi
+    chmod 644 "$tmp" 2>/dev/null || true
+    mv -f "$tmp" "$STATE_FILE"
+}
+
+# ==================== Live Re-detection / Drift ====================
+# config.sh persists across boots on purpose (user edits survive). But the
+# *system* can change underneath it: boot a different kernel from the GRUB
+# menu, swap the root disk, reinstall another distro over the same /etc.
+# Facts that don't drive tuning values are simply refreshed every apply;
+# the three that do (kernel flavor, distro, device type) are compared and,
+# per AUTO_REGEN, trigger a re-tune.
+refresh_volatile_detection() {
+    DISTRO_ID=$(detect_distro_id)
+    DISTRO_FAMILY=$(detect_distro_family)
+    DISTRO_VAL=$(get_distro)
+    INIT_SYSTEM=$(detect_init_system)
+    KERNEL_MM=$(get_kernel_mm)
+    KERNEL_VERSION_VAL=$(get_kernel_version)
+    PREEMPT_MODEL=$(get_preempt_model)
+    CGROUP_VERSION=$(get_cgroup_version)
+    HAS_PSI=$(has_psi && echo 1 || echo 0)
+    IS_CONTAINER=$(is_container && echo 1 || echo 0)
+    ZRAM_MANAGER=$(detect_zram_manager)
+    POWER_MANAGER=$(detect_power_manager)
+}
+
+# Sets DRIFT_REASON (non-empty on drift). Always returns 0.
+check_system_drift() {
+    DRIFT_REASON=""
+    local live_kernel live_distro live_device="desktop"
+    live_kernel=$(detect_kernel)
+    live_distro=$(detect_distro_id)
+    if is_handheld; then live_device="handheld"; elif is_laptop; then live_device="laptop"; fi
+
+    if [ "$live_kernel" != "${KERNEL:-}" ]; then
+        DRIFT_REASON+="kernel flavor ${KERNEL:-?} -> $live_kernel; "
+    fi
+    if [ "$live_distro" != "${DISTRO_ID:-}" ] && [ -n "${DISTRO_ID:-}" ]; then
+        DRIFT_REASON+="distro ${DISTRO_ID} -> $live_distro; "
+    fi
+    if [ "$live_device" != "${DEVICE_TYPE:-}" ]; then
+        DRIFT_REASON+="device ${DEVICE_TYPE:-?} -> $live_device; "
+    fi
+    return 0
+}
+
+# ==================== Main Application ====================
+apply_all() {
+    if [ "$DRY_RUN" = "1" ]; then log "--- DRY RUN MODE: no changes will be made ---"; fi
+
+    # Track wall-clock duration of the apply run for state.json's
+    # last_apply_duration field. date +%s.%N gives sub-second resolution on
+    # GNU coreutils; on systems where %N isn't supported it just prints
+    # literal "N", so fall back to whole-second resolution in that case.
+    local APPLY_START
+    APPLY_START="$(date +%s.%N 2>/dev/null)"
+    case "$APPLY_START" in
+        *N|*[!0-9.]*) APPLY_START="$(date +%s)" ;;
+    esac
+
+    check_dependencies
+
+    # --dry-run works on a scratch copy of the config so that neither config
+    # generation nor key migration can ever touch the real files.
+    local REAL_CONFIG_FILE="$CONFIG_FILE" REAL_STATE_FILE="$STATE_FILE"
+    if [ "$DRY_RUN" = "1" ]; then
+        DRYRUN_TMP="$(mktemp -d 2>/dev/null || true)"
+        [ -n "$DRYRUN_TMP" ] || { DRYRUN_TMP="/tmp/kernel-autotune-dryrun.$$"; mkdir -p "$DRYRUN_TMP"; }
+        if [ -f "$CONFIG_FILE" ]; then cp "$CONFIG_FILE" "$DRYRUN_TMP/config.sh"; fi
+        WORKDIR="$DRYRUN_TMP"
+        CONFIG_FILE="$DRYRUN_TMP/config.sh"
+        STATE_FILE="$DRYRUN_TMP/state.json"
+    fi
+
+    # If a config already exists, respect it — the user may have edited it.
+    # Only generate a fresh config when one doesn't exist yet.
+    if [ ! -f "$CONFIG_FILE" ]; then
+        log "No config found — generating defaults from hardware detection"
+        generate_config
+    else
+        log "Using existing config: $REAL_CONFIG_FILE"
+        log "(Run 'kernel-autotune regen-config' to regenerate from hardware detection)"
+    fi
+
+    # Validate before sourcing — catches syntax errors and missing/invalid keys
+    validate_config
+
+    # Source once here; all sub-functions use the exported environment.
+    # shellcheck source=/dev/null
+    source "$CONFIG_FILE"
+
+    # Keep capability/coexistence facts current, and notice a changed system.
+    refresh_volatile_detection
+    check_system_drift
+    if [ -n "$DRIFT_REASON" ]; then
+        if [ "${AUTO_REGEN:-1}" = "1" ]; then
+            log "System changed since config was generated (${DRIFT_REASON%; }) — re-tuning (AUTO_REGEN=1)"
+            local backup; backup="${CONFIG_FILE}.bak.$(date +%Y%m%d-%H%M%S)"
+            cp "$CONFIG_FILE" "$backup" 2>/dev/null && log "Previous config backed up to: $backup"
+            generate_config
+            # shellcheck source=/dev/null
+            source "$CONFIG_FILE"
+            refresh_volatile_detection
+        else
+            warn "System changed since config was generated (${DRIFT_REASON%; })."
+            warn "Run 'kernel-autotune regen-config' to re-tune (or set AUTO_REGEN=1 to do it automatically)."
+        fi
+    fi
+
+    # Fix #42: Track what has been applied so partial failures are visible in status.
+    local APPLIED=()
+    local FAILED_STEPS=()
+
+    _try_step() {
+        local step_name="$1"
+        shift
+        if "$@"; then
+            APPLIED+=("$step_name")
+        else
+            warn "Step '$step_name' failed"
+            FAILED_STEPS+=("$step_name")
+        fi
+    }
+
+    _try_step "sysctl"       apply_sysctl
+    _try_step "zram"         setup_zram
+    _try_step "zswap"        setup_zswap
+    _try_step "io_scheduler" tune_io_scheduler
+    _try_step "cpu_governor" tune_cpu_governor
+    _try_step "thp"          tune_thp
+    _try_step "fstrim"       enable_fstrim
+
+    local APPLY_END APPLY_DURATION
+    APPLY_END="$(date +%s.%N 2>/dev/null)"
+    case "$APPLY_END" in
+        *N|*[!0-9.]*) APPLY_END="$(date +%s)" ;;
+    esac
+    # Use awk for the subtraction so this works whether we got sub-second
+    # ("%s.%N") or whole-second timestamps, and round to 1 decimal place.
+    APPLY_DURATION="$(awk -v a="$APPLY_START" -v b="$APPLY_END" 'BEGIN { printf "%.1f", (b - a) }' 2>/dev/null || echo "0")"
+
+    # The state.json WRITE is skipped entirely in --dry-run, since dry-run
+    # must never mutate persistent state.
+    if [ "$DRY_RUN" = "1" ]; then
+        dry_run_notice "Would update $REAL_STATE_FILE (applied_steps, failed_steps, effective state, last_apply_duration)"
+    else
+        collect_effective_state
+        local _applied_str _failed_str _complete=1
+        _applied_str="$(IFS=' '; echo "${APPLIED[*]:-}")"
+        _failed_str="$(IFS=' '; echo "${FAILED_STEPS[*]:-}")"
+        if [ "${#FAILED_STEPS[@]}" -gt 0 ]; then _complete=0; fi
+        write_state_json "$_applied_str" "$_failed_str" "$_complete" "$APPLY_DURATION"
+    fi
+
+    if [ "${#FAILED_STEPS[@]}" -gt 0 ]; then
+        warn "Apply completed with failures: ${FAILED_STEPS[*]}"
+    else
+        log "All optimizations applied successfully"
+    fi
+    # Fix #9: No subshell re-source needed; variables are in scope from source above.
+    log "Profile: $KERNEL on $DEVICE_TYPE with ${RAM_MB}MB RAM — ${DISTRO_ID:-unknown}/${DISTRO_FAMILY:-unknown}, kernel ${KERNEL_MM:-?} (v${SCRIPT_VERSION})"
+    log "Apply completed in ${APPLY_DURATION}s"
+}
+
+# ==================== Config Regeneration ====================
+# Policy keys express the *user's intent* (how to coexist with other tools,
+# whether to auto re-tune), not detected facts — so they survive a regen.
+_preserve_policy() {
+    [ -f "$CONFIG_FILE" ] || return 0
+    local k v
+    for k in ZRAM_EXTERNAL_POLICY CPU_TUNING_POLICY AUTO_REGEN; do
+        v="$(bash -c "source \"$CONFIG_FILE\" 2>/dev/null; printf '%s' \"\${$k:-}\"" 2>/dev/null || true)"
+        case "$k:$v" in
+            ZRAM_EXTERNAL_POLICY:takeover|ZRAM_EXTERNAL_POLICY:defer|\
+            CPU_TUNING_POLICY:auto|CPU_TUNING_POLICY:force|CPU_TUNING_POLICY:off|\
+            AUTO_REGEN:0|AUTO_REGEN:1)
+                printf -v "$k" '%s' "$v" ;;
+        esac
+    done
+    return 0
+}
+
+regen_config() {
+    need_root
+    if [ -f "$CONFIG_FILE" ]; then
+        local backup; backup="${CONFIG_FILE}.bak.$(date +%Y%m%d-%H%M%S)"
+        cp "$CONFIG_FILE" "$backup"
+        log "Existing config backed up to: $backup"
+    fi
+    generate_config
+    log "Config regenerated from hardware detection."
+    log "Previous config saved as backup (see above)."
+    log "Run 'kernel-autotune apply' to apply the new settings."
+}
+
+# ==================== Installation ====================
+# Service definitions, one per supported init system. The systemd unit is
+# also shipped standalone as kernel-autotune.service and must stay identical.
+write_systemd_unit() {
+    cat > /etc/systemd/system/kernel-autotune.service <<EOF
+[Unit]
+Description=Kernel Autotune v${SCRIPT_VERSION}
+# sysinit.target: modprobe needs a working module filesystem
+# swap.target: avoid racing fstab swap activation, and run after any
+#   distro zram setup (zram-generator, zram-tools, ...) so we see its devices
+# systemd-modules-load/systemd-sysctl: our sysctl values must land after the
+#   distro's own, not be overwritten by them
+After=local-fs.target sysinit.target swap.target systemd-modules-load.service systemd-sysctl.service
+Before=systemd-user-sessions.service
+
+[Service]
+Type=oneshot
+ExecStart=${BIN_DIR}/kernel-autotune apply
+RemainAfterExit=yes
+# A generous but finite timeout so a hung swapon cannot stall boot forever
+TimeoutStartSec=120
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    systemctl daemon-reload
+    systemctl enable kernel-autotune.service
+}
+
+write_openrc_service() {
+    cat > /etc/init.d/kernel-autotune <<EOF
+#!/sbin/openrc-run
+# Kernel Autotune v${SCRIPT_VERSION} — applies tuning once at boot.
+description="Kernel Autotune v${SCRIPT_VERSION}"
+
+depend() {
+    need localmount
+    after modules sysctl swap
+}
+
+start() {
+    ebegin "Applying kernel-autotune settings"
+    ${BIN_DIR}/kernel-autotune apply
+    eend \$?
+}
+EOF
+    chmod +x /etc/init.d/kernel-autotune
+    rc-update add kernel-autotune default >/dev/null 2>&1 || \
+        warn "Could not run 'rc-update add kernel-autotune default'; add it manually"
+}
+
+write_runit_service() {
+    # Void (and other runit systems) source /etc/runit/core-services/*.sh
+    # during stage 1, in lexical order — a one-shot at boot is exactly that.
+    mkdir -p /etc/runit/core-services
+    cat > /etc/runit/core-services/99-kernel-autotune.sh <<EOF
+# Kernel Autotune v${SCRIPT_VERSION} — applied once at boot (sourced by runit stage 1)
+if [ -x "${BIN_DIR}/kernel-autotune" ]; then
+    "${BIN_DIR}/kernel-autotune" apply || true
+fi
+EOF
+}
+
+print_nixos_guidance() {
+    cat <<EOF
+[kernel-autotune] NixOS manages services declaratively, so install cannot write a
+unit file. The script itself is installed at ${BIN_DIR}/kernel-autotune.
+Add something like this to configuration.nix to run it at boot:
+
+  systemd.services.kernel-autotune = {
+    description = "Kernel Autotune";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "local-fs.target" "swap.target" "systemd-sysctl.service" ];
+    path = with pkgs; [ bash coreutils gawk gnused gnugrep procps kmod util-linux python3 ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${BIN_DIR}/kernel-autotune apply";
+    };
+  };
+EOF
+}
+
+install() {
+    need_root
+    log "Installing kernel autotune v${SCRIPT_VERSION}..."
+
+    mkdir -p "$WORKDIR" "$BIN_DIR" "$LIB_DIR"
+
+    # Fix #30: Use realpath to get the canonical script path; guard against
+    # being invoked as "bash kernel-autotune".
+    local SCRIPT_PATH
+    SCRIPT_PATH="$(realpath "$0" 2>/dev/null || true)"
+    if [ -z "$SCRIPT_PATH" ] || [ ! -f "$SCRIPT_PATH" ]; then
+        error "Cannot determine script path from \$0='$0'. Install by copying manually to $BIN_DIR/kernel-autotune."
+    fi
+
+    # Re-running `install` from the installed copy used to abort here
+    # (cp: 'x' and 'x' are the same file).
+    if [ ! "$SCRIPT_PATH" -ef "$BIN_DIR/kernel-autotune" ]; then
+        cp "$SCRIPT_PATH" "$BIN_DIR/kernel-autotune"
+    fi
+    chmod +x "$BIN_DIR/kernel-autotune"
+    _label_executable "$BIN_DIR/kernel-autotune"
+    [ "$PREFIX" = "/usr/local" ] || log "/usr/local is not writable here; installed under $PREFIX"
+
+    # Install the canonical zram implementation, so a plain single-file
+    # install (no package) gets working zram. Previously this file was only
+    # ever provided by a distro package, and zram was silently skipped
+    # without it.
+    {
+        printf '#!/usr/bin/env bash\n'
+        printf '# installed-by: kernel-autotune install (v%s)\n' "$SCRIPT_VERSION"
+        emit_zram_impl
+    } > "$CANONICAL_ZRAM_IMPL"
+    chmod +x "$CANONICAL_ZRAM_IMPL"
+    _label_executable "$CANONICAL_ZRAM_IMPL"
+
+    apply_all
+
+    # Fix #15: Single source of truth — write the service from here,
+    # keeping the systemd unit identical to the standalone kernel-autotune.service.
+    local init
+    init="$(detect_init_system)"
+    if [ "$(detect_distro_family)" = "nixos" ]; then
+        print_nixos_guidance
+        log "Installed. (Start-at-boot must be configured declaratively on NixOS.)"
+        return 0
+    fi
+    case "$init" in
+        systemd) write_systemd_unit;  log "Installed systemd service. Will run on every boot." ;;
+        openrc)  write_openrc_service; log "Installed OpenRC service. Will run on every boot." ;;
+        runit)   write_runit_service; log "Installed runit core-service. Will run on every boot." ;;
+        *)
+            warn "Init system '$init' is not one kernel-autotune can register with."
+            warn "Run '$BIN_DIR/kernel-autotune apply' from your init's boot scripts."
+            ;;
+    esac
+
+    log "Configuration: $CONFIG_FILE"
+    log "State: $STATE_FILE"
+}
+
+# ==================== Uninstallation ====================
+uninstall() {
+    need_root
+    log "Uninstalling kernel autotune..."
+
+    if [ -d /run/systemd/system ]; then
+        systemctl disable --now kernel-autotune.service 2>/dev/null || true
+    fi
+    if command -v rc-update >/dev/null 2>&1 && [ -e /etc/init.d/kernel-autotune ]; then
+        rc-update del kernel-autotune default >/dev/null 2>&1 || true
+    fi
+    rm -f /etc/systemd/system/kernel-autotune.service
+    rm -f /etc/init.d/kernel-autotune
+    rm -f /etc/runit/core-services/99-kernel-autotune.sh
+
+    # Remove from whichever prefix(es) it was installed under — /usr/local
+    # normally, the /var fallback on read-only-root systems.
+    local p d
+    for p in /usr/local /var/lib/kernel-autotune/prefix "$PREFIX"; do
+        rm -f "$p/bin/kernel-autotune" "$p/bin/kernel-autotune-zram.sh"
+        # Only remove the canonical zram impl if *we* installed it; a distro
+        # package that ships it owns that file.
+        if grep -q '^# installed-by: kernel-autotune install' "$p/lib/kernel-autotune/zram-impl.sh" 2>/dev/null; then
+            rm -f "$p/lib/kernel-autotune/zram-impl.sh"
+            rmdir "$p/lib/kernel-autotune" 2>/dev/null || true
+        fi
+    done
+    rm -rf /var/lib/kernel-autotune/prefix 2>/dev/null || true
+    rmdir /var/lib/kernel-autotune 2>/dev/null || true
+    for d in "${FSTRIM_CRON_DIRS[@]}"; do
+        if grep -q 'installed by kernel-autotune' "$d/kernel-autotune-fstrim" 2>/dev/null; then
+            rm -f "$d/kernel-autotune-fstrim"
+        fi
+    done
+    rm -rf "$WORKDIR"
+    rm -f "$SYSCTL_CONF"
+    # Fix #21: Also remove the log file on uninstall.
+    rm -f "$LOG_FILE"
+
+    if [ -d /run/systemd/system ]; then systemctl daemon-reload; fi
+
+    log "Uninstalled successfully"
+}
+
+# ==================== Detection Report ====================
+show_detection() {
+    local dev="desktop"
+    if is_handheld; then dev="handheld"; elif is_laptop; then dev="laptop"; fi
+    echo "distro=$(get_distro)"
+    echo "distro_id=$(detect_distro_id)"
+    echo "distro_family=$(detect_distro_family)"
+    echo "package_manager=$(detect_pkg_manager)"
+    echo "init_system=$(detect_init_system)"
+    echo "kernel_release=$(_uname_r)"
+    echo "kernel_profile=$(detect_kernel)"
+    echo "kernel_mm=$(get_kernel_mm)"
+    echo "preempt_model=$(get_preempt_model)"
+    echo "cgroup_version=$(get_cgroup_version)"
+    echo "psi=$(has_psi && echo 1 || echo 0)"
+    echo "container=$(is_container && echo 1 || echo 0)"
+    echo "root_readonly=$(root_is_readonly && echo 1 || echo 0)"
+    echo "device_type=$dev"
+    echo "cpufreq_driver=$(get_cpufreq_driver)"
+    echo "zram_manager=$(detect_zram_manager)"
+    echo "power_manager=$(detect_power_manager)"
+    echo "tcp_congestion=$(get_tcp_congestion bbr cubic)"
+    echo "install_prefix=$PREFIX"
+}
+
+# ==================== Status ====================
+show_status() {
+    # Fix #41: Inform non-root users explicitly if the log is unreadable.
+    if [ ! -f "$STATE_FILE" ]; then
+        echo "Not configured. Run 'install' first."
+        exit 1
+    fi
+
+    echo "=== Kernel Autotune Status (v${SCRIPT_VERSION}) ==="
+
+    # Fix #49: Show reconciliation between configured state and live state.
+    echo "--- Configured State ---"
+    cat "$STATE_FILE"
+    echo
+
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$STATE_FILE" <<'PYEOF' 2>/dev/null || echo "(Could not parse state file)"
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception as e:
+    print('Could not parse state file:', e)
+    sys.exit(0)
+print('System: %s (%s family), kernel %s [%s profile], init %s' % (
+    d.get('distro_id', '?'), d.get('distro_family', '?'), d.get('kernel_mm', '?'),
+    d.get('kernel', '?'), d.get('init_system', '?')))
+print('Coexisting with: zram=%s, power=%s' % (d.get('zram_manager', 'none'), d.get('power_manager', 'none')))
+print('Apply complete:', d.get('apply_complete', 'unknown'))
+failed = d.get('failed_steps', [])
+if failed:
+    print('Failed steps:', ', '.join(failed))
+eff = d.get('effective')
+if eff:
+    print('In effect: governor=%s (%s) THP=%s IO=%s zram=%s dev/%sMB' % (
+        eff.get('cpu_governor'), eff.get('cpufreq_driver'), eff.get('thp_enabled'),
+        eff.get('io_schedulers'), eff.get('zram_devices'), eff.get('zram_total_mb')))
+PYEOF
+    fi
+
+    echo
+    echo "--- Live ZRAM Swap ---"
+    # /proc/swaps works with util-linux *and* busybox (whose swapon lacks --show).
+    grep zram /proc/swaps 2>/dev/null || echo "No ZRAM active"
+
+    echo
+    echo "--- Logs (last 20 lines) ---"
+    if [ -r "$LOG_FILE" ]; then
+        tail -n 20 "$LOG_FILE"
+    elif [ -f "$LOG_FILE" ]; then
+        echo "Log exists but is not readable by current user (try sudo)"
+    else
+        echo "No logs yet"
+    fi
+}
+
+# ==================== Main ====================
+# Parse global flags before the subcommand
+COMMAND=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run|-n)
+            DRY_RUN=1
+            shift
+            ;;
+        --quiet|-q)
+            LOG_LEVEL=0
+            shift
+            ;;
+        --verbose|-v)
+            LOG_LEVEL=2
+            shift
+            ;;
+        --version|-V)
+            echo "kernel-autotune $SCRIPT_VERSION"
+            exit 0
+            ;;
+        --help|-h)
+            echo "Usage: $0 [--dry-run] [--quiet|--verbose] {install|apply|regen-config|uninstall|status|detect|--version}"
+            echo
+            echo "Commands:"
+            echo "  install      Install and enable on boot (systemd, OpenRC, runit)"
+            echo "  apply        Apply settings now (preserves config edits)"
+            echo "  regen-config Regenerate config from hardware detection (backs up existing)"
+            echo "  uninstall    Remove everything including logs"
+            echo "  status       Show current configuration and state"
+            echo "  detect       Print what was detected (distro, kernel, init, capabilities)"
+            echo
+            echo "Flags (can appear before the command):"
+            echo "  --dry-run    Print what would be done without making any changes"
+            echo "  --quiet      Suppress informational output (warnings/errors still shown)"
+            echo "  --verbose    Show per-device and per-step detail"
+            echo "  --version    Print version and exit"
+            echo "  --help       Show this help"
+            echo
+            echo "Config file: $CONFIG_FILE"
+            exit 0
+            ;;
+        -*)
+            echo "Unknown flag: $1" >&2
+            echo "Run '$0 --help' for usage." >&2
+            exit 1
+            ;;
+        *)
+            COMMAND="$1"
+            shift
+            break
+            ;;
+    esac
+done
+
+init_paths
+trap 'rc=$?; if [ -n "${DRYRUN_TMP:-}" ]; then rm -rf "$DRYRUN_TMP"; fi; exit $rc' EXIT
+
+if [ "$DRY_RUN" = "1" ]; then _write_log "Invoked with --dry-run"; fi
+if [ "$LOG_LEVEL" -eq 0 ]; then _write_log "Invoked with --quiet"; fi
+if [ "$LOG_LEVEL" -eq 2 ]; then _write_log "Invoked with --verbose"; fi
+
+case "${COMMAND:-apply}" in
+    install)
+        acquire_lock
+        install
+        ;;
+    apply)
+        need_root
+        acquire_lock
+        apply_all
+        ;;
+    regen-config)
+        need_root
+        acquire_lock
+        regen_config
+        ;;
+    uninstall)
+        need_root
+        acquire_lock
+        uninstall
+        ;;
+    status)
+        show_status
+        ;;
+    detect)
+        show_detection
+        ;;
+    *)
+        echo "Unknown command: $COMMAND" >&2
+        echo "Run '$0 --help' for usage." >&2
+        exit 1
+        ;;
+esac

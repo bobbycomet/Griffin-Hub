@@ -1,0 +1,5 @@
+#!/bin/sh
+# Process Sentry v3 — runit run script. runit starts services after stage 1,
+# where kernel-autotune has already applied, so state.json is fresh.
+exec 2>&1
+exec /usr/bin/python3 /usr/local/bin/sentryv3.py

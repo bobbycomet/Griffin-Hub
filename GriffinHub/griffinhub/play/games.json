@@ -1,0 +1,5290 @@
+{
+  "schema": 1,
+  "updated": "2026-10-21",
+  "_meta": "Tiers come from ProtonDB (run sync_protondb.py or let the GitHub Action do it). Notes/runtimes/sysctl are curated by hand: PR fixes. 'blocked': true marks games the developer blocks on Linux. distro_overrides example: {\"fedora\": {\"extra_packages\": [\"pkg\"], \"winetricks\": [\"verb\"], \"env\": {\"K\": \"V\"}, \"launch_options\": \"%command%\"}}",
+  "categories": [
+    "ARPG",
+    "Action",
+    "Casual",
+    "Co-op",
+    "FPS",
+    "MMO",
+    "MMORPG",
+    "RPG",
+    "Sim",
+    "Sports",
+    "Strategy",
+    "Survival"
+  ],
+  "defaults": {
+    "proton": "ge",
+    "launch_options": "gamemoderun %command%",
+    "winetricks": [],
+    "env": {},
+    "anticheat": "none"
+  },
+  "runtimes": {
+    "EAC": 1826330,
+    "BattlEye": 1161040
+  },
+  "distro_profiles": {
+    "ubuntu": {
+      "pre": "dpkg --add-architecture i386 && apt-get update",
+      "packages": [
+        "libvulkan1",
+        "libvulkan1:i386",
+        "mesa-vulkan-drivers",
+        "mesa-vulkan-drivers:i386",
+        "libpulse0:i386",
+        "gamemode"
+      ]
+    },
+    "debian": {
+      "pre": "dpkg --add-architecture i386 && apt-get update",
+      "packages": [
+        "libvulkan1",
+        "libvulkan1:i386",
+        "mesa-vulkan-drivers",
+        "mesa-vulkan-drivers:i386",
+        "libpulse0:i386",
+        "gamemode"
+      ]
+    },
+    "arch": {
+      "note": "Enable [multilib] in /etc/pacman.conf first.",
+      "packages": [
+        "vulkan-icd-loader",
+        "lib32-vulkan-icd-loader",
+        "lib32-libpulse",
+        "gamemode",
+        "lib32-gamemode"
+      ]
+    },
+    "fedora": {
+      "packages": [
+        "vulkan-loader",
+        "vulkan-loader.i686",
+        "mesa-vulkan-drivers",
+        "mesa-vulkan-drivers.i686",
+        "pulseaudio-libs.i686",
+        "gamemode"
+      ]
+    },
+    "opensuse": {
+      "packages": [
+        "libvulkan1",
+        "libvulkan1-32bit",
+        "libpulse0-32bit",
+        "gamemode"
+      ]
+    },
+    "steamos": {
+      "packages": [],
+      "note": "Immutable: user-space fixes only (Proton, protontricks, launch options)."
+    }
+  },
+  "games": [
+    {
+      "appid": 280560,
+      "name": "1800",
+      "categories": [
+        "Sim",
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 251570,
+      "name": "7 Days to Die",
+      "categories": [
+        "Survival",
+        "FPS",
+        "Co-op"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.79,
+        "total": 224,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 229100,
+      "name": "A Game of Thrones - Genesis",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 253230,
+      "name": "A Hat in Time",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 427410,
+      "name": "Abiotic Factor",
+      "categories": [
+        "Survival",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.79,
+        "total": 161,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 221380,
+      "name": "Age of Empires II (2013)",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 813780,
+      "name": "Age of Empires II: Definitive Edition",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 933110,
+      "name": "Age of Empires III: Definitive Edition",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1466860,
+      "name": "Age of Empires IV",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 226840,
+      "name": "Age of Wonders III",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 3393110,
+      "name": "AION 2",
+      "categories": [
+        "MMORPG",
+        "MMO",
+        "RPG",
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "UE5 NCSoft MMO (Steam 3393110). Windows-only. ProtonDB Gold. Prefer GE-Proton; check live reports if login/overlay issues.",
+      "anticheat": "none",
+      "engine": "Unreal Engine 5"
+    },
+    {
+      "appid": 761890,
+      "name": "Albion Online",
+      "categories": [
+        "MMORPG",
+        "MMO"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "Native Linux client. No Proton needed.",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.77,
+        "total": 81,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 270880,
+      "name": "American Truck Simulator",
+      "categories": [
+        "Sim"
+      ],
+      "proton": "native",
+      "notes": "Native Linux.",
+      "anticheat": "none",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 945360,
+      "name": "Among Us",
+      "categories": [
+        "Casual",
+        "Co-op"
+      ],
+      "engine": "Unity",
+      "notes": "Works well on Proton or native where available.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.84,
+        "total": 1198,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 266430,
+      "name": "Anomaly 2",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1172470,
+      "name": "Apex Legends",
+      "categories": [
+        "FPS"
+      ],
+      "anticheat": "EAC",
+      "notes": "Reported as blocked/unsupported on Linux by the developer. Check ProtonDB before playing.",
+      "blocked": true,
+      "protondb": {
+        "tier": "silver",
+        "best": "platinum",
+        "trending": "bronze",
+        "score": 0.52,
+        "total": 1791,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 2399830,
+      "name": "ARK: Survival Ascended",
+      "categories": [
+        "Survival",
+        "MMO",
+        "Co-op"
+      ],
+      "sysctl": {
+        "vm.max_map_count": "1048576"
+      },
+      "notes": "Large UE5 title: a higher vm.max_map_count avoids crashes on older distro defaults.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.7,
+        "total": 99,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 346110,
+      "name": "ARK: Survival Evolved",
+      "categories": [
+        "Survival",
+        "MMO",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.66,
+        "total": 301,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 107410,
+      "name": "Arma 3",
+      "categories": [
+        "Sim",
+        "FPS",
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1888160,
+      "name": "Armored Core VI: Fires of Rubicon",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 48190,
+      "name": "Assassin's Creed Brotherhood",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 242050,
+      "name": "Assassin's Creed IV Black Flag",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "Ubisoft Connect.",
+      "anticheat": "none"
+    },
+    {
+      "appid": 2208920,
+      "name": "Assassin's Creed Mirage",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "Ubisoft Connect.",
+      "anticheat": "none"
+    },
+    {
+      "appid": 812140,
+      "name": "Assassin's Creed Odyssey",
+      "categories": [
+        "Action",
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "Ubisoft Connect.",
+      "anticheat": "none"
+    },
+    {
+      "appid": 582160,
+      "name": "Assassin's Creed Origins",
+      "categories": [
+        "Action",
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "Ubisoft Connect.",
+      "anticheat": "none"
+    },
+    {
+      "appid": 311340,
+      "name": "Assassin's Creed Rogue",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 2012900,
+      "name": "Assassin's Creed Shadows",
+      "categories": [
+        "Action",
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "Ubisoft Connect; demanding.",
+      "anticheat": "none"
+    },
+    {
+      "appid": 368500,
+      "name": "Assassin's Creed Syndicate",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "Ubisoft Connect.",
+      "anticheat": "none"
+    },
+    {
+      "appid": 311560,
+      "name": "Assassin's Creed Unity",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "Ubisoft Connect.",
+      "anticheat": "none"
+    },
+    {
+      "appid": 911400,
+      "name": "Assassin's Creed Valhalla",
+      "categories": [
+        "Action",
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "Ubisoft Connect.",
+      "anticheat": "none"
+    },
+    {
+      "appid": 244210,
+      "name": "Assetto Corsa",
+      "categories": [
+        "Sim",
+        "Sports"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1239080,
+      "name": "Assetto Corsa Competizione",
+      "categories": [
+        "Sim",
+        "Sports"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none",
+      "engine": "Unreal Engine"
+    },
+    {
+      "appid": 924970,
+      "name": "Back 4 Blood",
+      "categories": [
+        "FPS",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.58,
+        "total": 276,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1086940,
+      "name": "Baldur's Gate 3",
+      "categories": [
+        "RPG"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "Native Linux build. Use the Vulkan option if the default fails.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.84,
+        "total": 1531,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 240720,
+      "name": "Bastion",
+      "categories": [
+        "Action",
+        "RPG"
+      ],
+      "proton": "native",
+      "notes": "",
+      "anticheat": "none",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 238460,
+      "name": "BattleBlock Theater",
+      "categories": [
+        "Action",
+        "Casual",
+        "Co-op"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1517290,
+      "name": "Battlefield 2042",
+      "categories": [
+        "FPS"
+      ],
+      "blocked": true,
+      "anticheat": "EA Javelin",
+      "notes": "Anti-cheat blocks Linux/Proton by developer choice. Check ProtonDB before buying.",
+      "protondb": {
+        "tier": "borked",
+        "best": "platinum",
+        "trending": "borked",
+        "score": 0.02,
+        "total": 102,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1238810,
+      "name": "Battlefield V",
+      "categories": [
+        "FPS"
+      ],
+      "proton": "ge",
+      "notes": "EA anti-cheat may block multiplayer.",
+      "anticheat": "custom"
+    },
+    {
+      "appid": 24960,
+      "name": "Battlefield: Bad Company 2",
+      "categories": [
+        "FPS"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 516750,
+      "name": "BeamNG.drive",
+      "categories": [
+        "Sim",
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 620980,
+      "name": "Beat Saber",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "VR title.",
+      "anticheat": "none",
+      "engine": "Unity"
+    },
+    {
+      "appid": 582660,
+      "name": "Black Desert",
+      "categories": [
+        "MMORPG",
+        "RPG"
+      ],
+      "notes": "Launcher can show a black window on first run; relaunching usually fixes it.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.62,
+        "total": 311,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 2344520,
+      "name": "Black Desert",
+      "categories": [
+        "MMORPG",
+        "MMO",
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "XignCode/anti-cheat historically hard on Linux.",
+      "anticheat": "custom"
+    },
+    {
+      "appid": 2358720,
+      "name": "Black Myth: Wukong",
+      "categories": [
+        "ARPG",
+        "RPG"
+      ],
+      "engine": "Unreal 5",
+      "sysctl": {
+        "vm.max_map_count": "1048576"
+      },
+      "notes": "Let shaders finish compiling on first start. Keep Mesa/NVIDIA drivers current.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.81,
+        "total": 209,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 960090,
+      "name": "Bloons TD 6",
+      "categories": [
+        "Strategy",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none",
+      "engine": "Unity"
+    },
+    {
+      "appid": 49520,
+      "name": "Borderlands 2",
+      "categories": [
+        "FPS",
+        "RPG",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.83,
+        "total": 388,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 397540,
+      "name": "Borderlands 3",
+      "categories": [
+        "FPS",
+        "RPG",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.77,
+        "total": 594,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 261640,
+      "name": "Borderlands: The Pre-Sequel",
+      "categories": [
+        "FPS",
+        "Action",
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 243930,
+      "name": "Bound by Flame",
+      "categories": [
+        "Action",
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 291550,
+      "name": "Brawlhalla",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 266310,
+      "name": "Brawlhalla",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 274190,
+      "name": "Broforce",
+      "categories": [
+        "Action",
+        "Co-op"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 225080,
+      "name": "Brothers - A Tale of Two Sons",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 225260,
+      "name": "Brütal Legend",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1938090,
+      "name": "Call of Duty",
+      "categories": [
+        "FPS"
+      ],
+      "proton": "ge",
+      "notes": "RICOCHET — typically blocked on Linux.",
+      "anticheat": "custom",
+      "blocked": true
+    },
+    {
+      "appid": 311210,
+      "name": "Call of Duty: Black Ops III",
+      "categories": [
+        "FPS"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 284160,
+      "name": "Carmageddon: Max Damage",
+      "categories": [
+        "Action",
+        "Sports"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 227860,
+      "name": "Castle Story",
+      "categories": [
+        "Strategy",
+        "Sim"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 504230,
+      "name": "Celeste",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.9,
+        "total": 283,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 259340,
+      "name": "Chicken Invaders 4",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 256290,
+      "name": "Child of Light",
+      "categories": [
+        "RPG",
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 255710,
+      "name": "Cities: Skylines",
+      "categories": [
+        "Sim",
+        "Casual"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.71,
+        "total": 372,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 949230,
+      "name": "Cities: Skylines II",
+      "categories": [
+        "Sim"
+      ],
+      "proton": "ge",
+      "notes": "Demanding; GE-Proton.",
+      "anticheat": "none",
+      "engine": "Unity"
+    },
+    {
+      "appid": 231430,
+      "name": "Company of Heroes 2",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1677280,
+      "name": "Company of Heroes 3",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 440900,
+      "name": "Conan Exiles",
+      "categories": [
+        "Survival",
+        "MMO",
+        "RPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.62,
+        "total": 281,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 2881650,
+      "name": "Content Warning",
+      "categories": [
+        "Casual",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.84,
+        "total": 204,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 10,
+      "name": "Counter-Strike",
+      "categories": [
+        "FPS"
+      ],
+      "proton": "native",
+      "notes": "Native/GoldSrc (1.6).",
+      "anticheat": "VAC",
+      "engine": "GoldSrc",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 730,
+      "name": "Counter-Strike 2",
+      "categories": [
+        "FPS"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "Native Linux client. Competitive matchmaking works.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.72,
+        "total": 2059,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 2539610,
+      "name": "Counter-Strike 2 Workshop Tools",
+      "categories": [
+        "Casual"
+      ],
+      "proton": "native",
+      "notes": "",
+      "anticheat": "none",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 273110,
+      "name": "Counter-Strike Nexon",
+      "categories": [
+        "FPS"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 240,
+      "name": "Counter-Strike: Source",
+      "categories": [
+        "FPS"
+      ],
+      "proton": "native",
+      "notes": "Native.",
+      "anticheat": "VAC",
+      "engine": "Source",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 499450,
+      "name": "Crash Bandicoot N. Sane Trilogy",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 262560,
+      "name": "Crazy Machines 3",
+      "categories": [
+        "Casual",
+        "Sim"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 263280,
+      "name": "Cross of the Dutchman",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1158310,
+      "name": "Crusader Kings III",
+      "categories": [
+        "Strategy",
+        "RPG"
+      ],
+      "proton": "native",
+      "notes": "Native Linux.",
+      "anticheat": "none",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 247080,
+      "name": "Crypt of the NecroDancer",
+      "categories": [
+        "Action",
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 268910,
+      "name": "Cuphead",
+      "categories": [
+        "Action",
+        "Casual",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.86,
+        "total": 344,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1091500,
+      "name": "Cyberpunk 2077",
+      "categories": [
+        "RPG",
+        "FPS"
+      ],
+      "env": {
+        "PROTON_ENABLE_NVAPI": "1"
+      },
+      "notes": "NVAPI var only matters on NVIDIA GPUs (DLSS).",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.77,
+        "total": 2739,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 374320,
+      "name": "DARK SOULS III",
+      "categories": [
+        "ARPG",
+        "RPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.84,
+        "total": 733,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 570940,
+      "name": "DARK SOULS: REMASTERED",
+      "categories": [
+        "ARPG",
+        "RPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.87,
+        "total": 418,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1868140,
+      "name": "DAVE THE DIVER",
+      "categories": [
+        "Casual",
+        "RPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.86,
+        "total": 165,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 221100,
+      "name": "DayZ",
+      "categories": [
+        "Survival",
+        "FPS"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 381210,
+      "name": "Dead by Daylight",
+      "categories": [
+        "Co-op",
+        "Action"
+      ],
+      "anticheat": "EAC",
+      "runtimes": [
+        "EAC"
+      ],
+      "notes": "Needs the EAC runtime (installed automatically).",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.67,
+        "total": 1028,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 588650,
+      "name": "Dead Cells",
+      "categories": [
+        "Action",
+        "RPG"
+      ],
+      "proton": "native",
+      "notes": "Native Linux.",
+      "anticheat": "none",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 1693980,
+      "name": "Dead Space (2023)",
+      "categories": [
+        "Action",
+        "Survival"
+      ],
+      "proton": "ge",
+      "notes": "EA App remake.",
+      "anticheat": "none"
+    },
+    {
+      "appid": 548430,
+      "name": "Deep Rock Galactic",
+      "categories": [
+        "FPS",
+        "Co-op"
+      ],
+      "notes": "Rock solid. No special options needed for most players.",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.89,
+        "total": 1631,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1085660,
+      "name": "Destiny 2",
+      "categories": [
+        "FPS",
+        "MMO"
+      ],
+      "anticheat": "BattlEye",
+      "notes": "Reported as blocked/unsupported on Linux by the developer. Check ProtonDB before playing.",
+      "blocked": true,
+      "protondb": {
+        "tier": "borked",
+        "best": "platinum",
+        "trending": "borked",
+        "score": 0.01,
+        "total": 263,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 226320,
+      "name": "Devil May Cry 4 Special Edition",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 435150,
+      "name": "Divinity: Original Sin 2 - Definitive Edition",
+      "categories": [
+        "RPG",
+        "Strategy"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.77,
+        "total": 661,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 230230,
+      "name": "Divinity: Original Sin Enhanced Edition",
+      "categories": [
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 220440,
+      "name": "DmC Devil May Cry",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 322330,
+      "name": "Don't Starve Together",
+      "categories": [
+        "Survival",
+        "Co-op"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.81,
+        "total": 126,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 379720,
+      "name": "DOOM",
+      "categories": [
+        "FPS"
+      ],
+      "notes": "Excellent. Vulkan is preferred.",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.86,
+        "total": 1205,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 782330,
+      "name": "DOOM Eternal",
+      "categories": [
+        "FPS"
+      ],
+      "notes": "Very good on Proton. Ray tracing works on supported hardware with recent drivers.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.75,
+        "total": 1247,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 248610,
+      "name": "Door Kickers",
+      "categories": [
+        "Strategy",
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 570,
+      "name": "Dota 2",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.69,
+        "total": 358,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1046930,
+      "name": "Dota Underlords",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "native",
+      "notes": "Native.",
+      "anticheat": "none",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 252350,
+      "name": "Double Dragon Neon",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 678950,
+      "name": "Dragon Ball FighterZ",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 2054970,
+      "name": "Dragon's Dogma 2",
+      "categories": [
+        "RPG",
+        "ARPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "silver",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.54,
+        "total": 239,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 262280,
+      "name": "Dungeons 2",
+      "categories": [
+        "Strategy",
+        "Sim"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 236090,
+      "name": "Dust: An Elysian Tail",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 239140,
+      "name": "Dying Light",
+      "categories": [
+        "Action",
+        "Survival",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.88,
+        "total": 306,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 534380,
+      "name": "Dying Light 2 Stay Human",
+      "categories": [
+        "ARPG",
+        "Action",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.83,
+        "total": 336,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 526720,
+      "name": "Dyson Sphere Program",
+      "categories": [
+        "Sim",
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none",
+      "engine": "Unity"
+    },
+    {
+      "appid": 1811260,
+      "name": "EA SPORTS FC 24",
+      "categories": [
+        "Sports"
+      ],
+      "proton": "ge",
+      "notes": "EA App + anti-cheat often blocked.",
+      "anticheat": "custom",
+      "blocked": true
+    },
+    {
+      "appid": 2195250,
+      "name": "EA SPORTS FC 25",
+      "categories": [
+        "Sports"
+      ],
+      "proton": "ge",
+      "notes": "EA App + anti-cheat often blocked.",
+      "anticheat": "custom",
+      "blocked": true
+    },
+    {
+      "appid": 237310,
+      "name": "El Shaddai ASCENSION OF THE METATRON",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1245620,
+      "name": "Elden Ring",
+      "categories": [
+        "ARPG",
+        "RPG"
+      ],
+      "engine": "FromSoftware",
+      "anticheat": "EAC",
+      "runtimes": [
+        "EAC"
+      ],
+      "notes": "Online play needs the EAC runtime (installed automatically). Launching the game exe directly gives offline play without EAC.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.79,
+        "total": 2105,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 2622380,
+      "name": "ELDEN RING NIGHTREIGN",
+      "categories": [
+        "ARPG",
+        "Co-op"
+      ],
+      "anticheat": "EAC",
+      "runtimes": [
+        "EAC"
+      ],
+      "notes": "Needs the EAC runtime (installed automatically).",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.85,
+        "total": 354,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 359320,
+      "name": "Elite Dangerous",
+      "categories": [
+        "Sim",
+        "MMO"
+      ],
+      "notes": "Works; launcher can be slow on first start.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.74,
+        "total": 1014,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 275390,
+      "name": "Enable",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1203620,
+      "name": "Enshrouded",
+      "categories": [
+        "Survival",
+        "RPG",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.75,
+        "total": 346,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 227300,
+      "name": "Euro Truck Simulator 2",
+      "categories": [
+        "Sim",
+        "Casual"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.9,
+        "total": 502,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 236850,
+      "name": "Europa Universalis IV",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "native",
+      "notes": "Native Linux.",
+      "anticheat": "none",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 427520,
+      "name": "Factorio",
+      "categories": [
+        "Sim",
+        "Strategy",
+        "Co-op"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.93,
+        "total": 348,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 288470,
+      "name": "Fahrenheit: Indigo Prophecy Remastered",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1097150,
+      "name": "Fall Guys",
+      "categories": [
+        "Casual"
+      ],
+      "engine": "Unity",
+      "anticheat": "EAC",
+      "runtimes": [
+        "EAC"
+      ],
+      "notes": "Needs the EAC runtime.",
+      "protondb": {
+        "tier": "silver",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.57,
+        "total": 987,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 22370,
+      "name": "Fallout 3",
+      "categories": [
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 377160,
+      "name": "Fallout 4",
+      "categories": [
+        "RPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.79,
+        "total": 911,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 268650,
+      "name": "Fallout 4 VR",
+      "categories": [
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1151340,
+      "name": "Fallout 76",
+      "categories": [
+        "RPG",
+        "MMO"
+      ],
+      "proton": "ge",
+      "notes": "Bethesda.net; variable online status on Proton.",
+      "anticheat": "none"
+    },
+    {
+      "appid": 22380,
+      "name": "Fallout: New Vegas",
+      "categories": [
+        "RPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.83,
+        "total": 725,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 220240,
+      "name": "Far Cry 3",
+      "categories": [
+        "Action",
+        "FPS"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1248130,
+      "name": "Farming Simulator 22",
+      "categories": [
+        "Sim"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 2300320,
+      "name": "Farming Simulator 25",
+      "categories": [
+        "Sim"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 224760,
+      "name": "FEZ",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "native",
+      "notes": "",
+      "anticheat": "none",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 1506830,
+      "name": "FIFA 23",
+      "categories": [
+        "Sports"
+      ],
+      "proton": "ge",
+      "notes": "EA anti-cheat — often blocked.",
+      "anticheat": "custom",
+      "blocked": true
+    },
+    {
+      "appid": 1462040,
+      "name": "FINAL FANTASY VII REMAKE INTERGRADE",
+      "categories": [
+        "RPG",
+        "ARPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.88,
+        "total": 207,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 39210,
+      "name": "Final Fantasy XIV Online",
+      "categories": [
+        "MMORPG",
+        "RPG"
+      ],
+      "proton": "experimental",
+      "notes": "Run the launcher once so the prefix exists.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.75,
+        "total": 690,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 304390,
+      "name": "FOR HONOR",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "BattlEye often problematic.",
+      "anticheat": "BattlEye"
+    },
+    {
+      "appid": 253310,
+      "name": "Fotonica",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 240760,
+      "name": "Game of Thrones",
+      "categories": [
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 4000,
+      "name": "Garry's Mod",
+      "categories": [
+        "Casual",
+        "Sim"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.78,
+        "total": 503,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 2215430,
+      "name": "Ghost of Tsushima DIRECTOR'S CUT",
+      "categories": [
+        "Action",
+        "ARPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.8,
+        "total": 358,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 224500,
+      "name": "Gnomoria",
+      "categories": [
+        "Sim",
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1593500,
+      "name": "God of War",
+      "categories": [
+        "ARPG",
+        "Action"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.84,
+        "total": 414,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 271590,
+      "name": "Grand Theft Auto V",
+      "categories": [
+        "Action",
+        "FPS"
+      ],
+      "notes": "Works well on current GE-Proton. Rockstar Launcher can be finicky; if it fails, try deleting the Rockstar Games folder in the prefix and re-auth.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.71,
+        "total": 2280,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 219990,
+      "name": "Grim Dawn",
+      "categories": [
+        "ARPG",
+        "RPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.84,
+        "total": 625,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 252150,
+      "name": "Grim Fandango Remastered",
+      "categories": [
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 962130,
+      "name": "Grounded",
+      "categories": [
+        "Survival",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.66,
+        "total": 221,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1284210,
+      "name": "Guild Wars 2",
+      "categories": [
+        "MMORPG",
+        "MMO"
+      ],
+      "notes": "Works well on Proton.",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.87,
+        "total": 348,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1145360,
+      "name": "Hades",
+      "categories": [
+        "ARPG",
+        "Action"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.91,
+        "total": 756,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1145350,
+      "name": "Hades II",
+      "categories": [
+        "ARPG",
+        "Action"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.87,
+        "total": 225,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 220,
+      "name": "Half-Life 2",
+      "categories": [
+        "FPS"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.91,
+        "total": 220,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 320,
+      "name": "Half-Life 2: Deathmatch",
+      "categories": [
+        "FPS"
+      ],
+      "proton": "native",
+      "notes": "Native.",
+      "anticheat": "VAC",
+      "engine": "Source",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 546560,
+      "name": "Half-Life: Alyx",
+      "categories": [
+        "FPS",
+        "Action"
+      ],
+      "proton": "native",
+      "notes": "Native/Proton VR classic.",
+      "anticheat": "none",
+      "engine": "Source 2",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 1240440,
+      "name": "Halo Infinite",
+      "categories": [
+        "FPS"
+      ],
+      "proton": "ge",
+      "notes": "Xbox anti-cheat may limit multiplayer.",
+      "anticheat": "custom"
+    },
+    {
+      "appid": 269270,
+      "name": "HALO THE MASTER CHIEF COLLECTION",
+      "categories": [
+        "FPS"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 277430,
+      "name": "Halo: Spartan Assault",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 976730,
+      "name": "Halo: The Master Chief Collection",
+      "categories": [
+        "FPS"
+      ],
+      "proton": "ge",
+      "notes": "Xbox services.",
+      "anticheat": "custom"
+    },
+    {
+      "appid": 394360,
+      "name": "Hearts of Iron IV",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "native",
+      "notes": "Native Linux.",
+      "anticheat": "none",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 686810,
+      "name": "Hell Let Loose",
+      "categories": [
+        "FPS"
+      ],
+      "engine": "Unreal 4",
+      "anticheat": "EAC",
+      "runtimes": [
+        "EAC"
+      ],
+      "notes": "Needs the EAC runtime; works when the developer has Linux EAC enabled.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.64,
+        "total": 388,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 553850,
+      "name": "HELLDIVERS 2",
+      "categories": [
+        "FPS",
+        "Co-op"
+      ],
+      "anticheat": "GameGuard",
+      "notes": "Anti-cheat support has varied between updates; check ProtonDB before big patches.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.81,
+        "total": 2122,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 269210,
+      "name": "Heroine Anthem Zero",
+      "categories": [
+        "Action",
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1817230,
+      "name": "Hi-Fi RUSH",
+      "categories": [
+        "Action"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.86,
+        "total": 110,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 236870,
+      "name": "HITMAN",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 990080,
+      "name": "Hogwarts Legacy",
+      "categories": [
+        "RPG",
+        "ARPG"
+      ],
+      "engine": "Unreal 4",
+      "sysctl": {
+        "vm.max_map_count": "1048576"
+      },
+      "notes": "Low vm.max_map_count causes crashes on some distros. First launch compiles shaders; expect a long load.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.82,
+        "total": 805,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 367520,
+      "name": "Hollow Knight",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.92,
+        "total": 377,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1030300,
+      "name": "Hollow Knight: Silksong",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "Use native if available; else GE-Proton.",
+      "anticheat": "none"
+    },
+    {
+      "appid": 223100,
+      "name": "Homefront",
+      "categories": [
+        "FPS"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 244160,
+      "name": "Homeworld Remastered Collection",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1151640,
+      "name": "Horizon Zero Dawn",
+      "categories": [
+        "ARPG",
+        "Action"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.68,
+        "total": 783,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 594650,
+      "name": "Hunt: Showdown 1896",
+      "categories": [
+        "FPS",
+        "Survival"
+      ],
+      "proton": "ge",
+      "notes": "Crytek anti-cheat.",
+      "anticheat": "custom"
+    },
+    {
+      "appid": 236450,
+      "name": "ICEY",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 859580,
+      "name": "Imperator: Rome",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "native",
+      "notes": "Native Linux.",
+      "anticheat": "none",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 222880,
+      "name": "Insurgency",
+      "categories": [
+        "FPS"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 581320,
+      "name": "Insurgency: Sandstorm",
+      "categories": [
+        "FPS"
+      ],
+      "anticheat": "EAC",
+      "runtimes": [
+        "EAC"
+      ],
+      "notes": "Needs the EAC runtime (installed automatically).",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.64,
+        "total": 650,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 234670,
+      "name": "Ishar: Legend of the Fortress",
+      "categories": [
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1426210,
+      "name": "It Takes Two",
+      "categories": [
+        "Action",
+        "Co-op"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 242110,
+      "name": "Joe Danger 2: The Movie",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 225540,
+      "name": "Just Cause 3",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 233860,
+      "name": "Kenshi",
+      "categories": [
+        "Strategy",
+        "RPG",
+        "Survival"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 220200,
+      "name": "Kerbal Space Program",
+      "categories": [
+        "Sim"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 232090,
+      "name": "Killing Floor 2",
+      "categories": [
+        "FPS",
+        "Co-op"
+      ],
+      "notes": "Works well. Some players prefer GE-Proton for stability with workshop content.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.82,
+        "total": 460,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 899770,
+      "name": "Last Epoch",
+      "categories": [
+        "ARPG",
+        "RPG"
+      ],
+      "engine": "Unity",
+      "notes": "Generally runs well.",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.84,
+        "total": 249,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 500,
+      "name": "Left 4 Dead",
+      "categories": [
+        "FPS",
+        "Co-op"
+      ],
+      "proton": "native",
+      "notes": "Native.",
+      "anticheat": "VAC",
+      "engine": "Source",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 550,
+      "name": "Left 4 Dead 2",
+      "categories": [
+        "FPS",
+        "Co-op"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.8,
+        "total": 436,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 224920,
+      "name": "Legacy of Kain: Soul Reaver",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 266010,
+      "name": "Lego Batman 3: Beyond Gotham",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 920210,
+      "name": "LEGO Star Wars: The Skywalker Saga",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1966720,
+      "name": "Lethal Company",
+      "categories": [
+        "Casual",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.91,
+        "total": 406,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1903340,
+      "name": "Lethal Company",
+      "categories": [
+        "Co-op",
+        "Survival",
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "Unity. Excellent on Proton.",
+      "anticheat": "none",
+      "engine": "Unity"
+    },
+    {
+      "appid": 1627720,
+      "name": "Lies of P",
+      "categories": [
+        "ARPG",
+        "RPG"
+      ],
+      "engine": "Unreal 4",
+      "notes": "Generally smooth on a current GE-Proton.",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.91,
+        "total": 163,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 319630,
+      "name": "Life is Strange",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1940340,
+      "name": "Like a Dragon Gaiden: The Man Who Erased His Name",
+      "categories": [
+        "Action",
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 2165270,
+      "name": "Like a Dragon: Infinite Wealth",
+      "categories": [
+        "RPG",
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1238840,
+      "name": "Like a Dragon: Ishin!",
+      "categories": [
+        "Action",
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 860510,
+      "name": "Little Nightmares",
+      "categories": [
+        "Action",
+        "Survival"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1032430,
+      "name": "Little Nightmares II",
+      "categories": [
+        "Action",
+        "Survival"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1599340,
+      "name": "Lost Ark",
+      "categories": [
+        "MMORPG",
+        "ARPG"
+      ],
+      "anticheat": "EAC",
+      "runtimes": [
+        "EAC"
+      ],
+      "notes": "Needs the EAC runtime.",
+      "protondb": {
+        "tier": "bronze",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.19,
+        "total": 191,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 234140,
+      "name": "Mad Max",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 2767030,
+      "name": "Marvel Rivals",
+      "categories": [
+        "FPS"
+      ],
+      "engine": "Unreal 5",
+      "anticheat": "custom",
+      "notes": "Needs a recent GE-Proton; long first-launch shader compile.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.79,
+        "total": 1649,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 2651280,
+      "name": "Marvel's Spider-Man 2",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1817070,
+      "name": "Marvel's Spider-Man Remastered",
+      "categories": [
+        "Action"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.82,
+        "total": 313,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 17460,
+      "name": "Mass Effect",
+      "categories": [
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 24980,
+      "name": "Mass Effect 2",
+      "categories": [
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1238000,
+      "name": "Mass Effect 2 (2010 Edition)",
+      "categories": [
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1238020,
+      "name": "Mass Effect 3",
+      "categories": [
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1328670,
+      "name": "Mass Effect Legendary Edition",
+      "categories": [
+        "RPG",
+        "FPS"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.7,
+        "total": 515,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 241930,
+      "name": "Middle-earth: Shadow of Mordor",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 287980,
+      "name": "Mini Metro",
+      "categories": [
+        "Casual",
+        "Sim"
+      ],
+      "proton": "native",
+      "notes": "",
+      "anticheat": "none",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 1446780,
+      "name": "Monster Hunter Rise",
+      "categories": [
+        "ARPG",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.76,
+        "total": 549,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 2246340,
+      "name": "Monster Hunter Wilds",
+      "categories": [
+        "Action",
+        "RPG",
+        "Co-op"
+      ],
+      "proton": "ge",
+      "notes": "Heavy GPU load; GE-Proton.",
+      "anticheat": "none"
+    },
+    {
+      "appid": 582010,
+      "name": "Monster Hunter: World",
+      "categories": [
+        "ARPG",
+        "Co-op"
+      ],
+      "notes": "Generally excellent. Online features work with current Proton.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.81,
+        "total": 994,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1971870,
+      "name": "Mortal Kombat 1",
+      "categories": [
+        "Action"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.74,
+        "total": 76,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1384160,
+      "name": "Mortal Kombat 1",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 976310,
+      "name": "Mortal Kombat 11",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 307780,
+      "name": "Mortal Kombat X",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 261550,
+      "name": "Mount & Blade II: Bannerlord",
+      "categories": [
+        "Action",
+        "Strategy",
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 48700,
+      "name": "Mount & Blade: Warband",
+      "categories": [
+        "Action",
+        "Strategy",
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 2461130,
+      "name": "NARAKA BLADEPOINT",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1203220,
+      "name": "NARAKA: BLADEPOINT",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "EAC.",
+      "anticheat": "EAC",
+      "runtimes": [
+        "EAC"
+      ]
+    },
+    {
+      "appid": 2338770,
+      "name": "NBA 2K24",
+      "categories": [
+        "Sports"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "custom"
+    },
+    {
+      "appid": 1262540,
+      "name": "Need for Speed Heat",
+      "categories": [
+        "Sports",
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "EA App.",
+      "anticheat": "custom"
+    },
+    {
+      "appid": 109600,
+      "name": "Neverwinter",
+      "categories": [
+        "MMORPG",
+        "MMO",
+        "ARPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.57,
+        "total": 142,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 524220,
+      "name": "NieR:Automata",
+      "categories": [
+        "Action",
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1325200,
+      "name": "Nioh 2 - The Complete Edition",
+      "categories": [
+        "ARPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.76,
+        "total": 101,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 485510,
+      "name": "Nioh: Complete Edition",
+      "categories": [
+        "ARPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.57,
+        "total": 134,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 275850,
+      "name": "No Man's Sky",
+      "categories": [
+        "Survival",
+        "Sim",
+        "Co-op"
+      ],
+      "notes": "Works well. Occasional multiplayer desync reports; restarting the session usually fixes it.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.82,
+        "total": 1776,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 224260,
+      "name": "No More Room in Hell",
+      "categories": [
+        "Survival",
+        "FPS",
+        "Co-op"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1343370,
+      "name": "Old School RuneScape",
+      "categories": [
+        "MMORPG",
+        "MMO"
+      ],
+      "proton": "native",
+      "notes": "Native Java client.",
+      "launch_options": "%command%",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.8,
+        "total": 94,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 2380900,
+      "name": "Once Human",
+      "categories": [
+        "Survival",
+        "MMO"
+      ],
+      "proton": "ge",
+      "notes": "EAC.",
+      "anticheat": "EAC",
+      "runtimes": [
+        "EAC"
+      ]
+    },
+    {
+      "appid": 261570,
+      "name": "Ori and the Blind Forest",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 238320,
+      "name": "Outlast",
+      "categories": [
+        "Action",
+        "Survival"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 2357570,
+      "name": "Overwatch 2",
+      "categories": [
+        "FPS"
+      ],
+      "notes": "Works through Steam on a current Proton.",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.84,
+        "total": 1220,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1623730,
+      "name": "Palworld",
+      "categories": [
+        "Casual",
+        "Survival",
+        "Co-op"
+      ],
+      "engine": "Unreal 5",
+      "notes": "UE5 shader compile on first launch.",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.85,
+        "total": 588,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 238960,
+      "name": "Path of Exile",
+      "categories": [
+        "ARPG",
+        "RPG",
+        "MMO"
+      ],
+      "notes": "If the default renderer misbehaves, switch the in-game renderer between Vulkan and DX11.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.78,
+        "total": 1200,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 2694490,
+      "name": "Path of Exile 2",
+      "categories": [
+        "ARPG",
+        "RPG"
+      ],
+      "notes": "Use a current GE-Proton; try the Vulkan renderer if you see stutter.",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.86,
+        "total": 686,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 218620,
+      "name": "PAYDAY 2",
+      "categories": [
+        "FPS",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.83,
+        "total": 361,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1272080,
+      "name": "PAYDAY 3",
+      "categories": [
+        "FPS",
+        "Co-op"
+      ],
+      "proton": "ge",
+      "notes": "EAC.",
+      "anticheat": "EAC",
+      "runtimes": [
+        "EAC"
+      ]
+    },
+    {
+      "appid": 1127400,
+      "name": "People Playground",
+      "categories": [
+        "Casual",
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none",
+      "engine": "Unity"
+    },
+    {
+      "appid": 2161700,
+      "name": "Persona 3 Reload",
+      "categories": [
+        "RPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.85,
+        "total": 219,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1808500,
+      "name": "Persona 3 Reload",
+      "categories": [
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1113000,
+      "name": "Persona 4 Golden",
+      "categories": [
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1687950,
+      "name": "Persona 5 Royal",
+      "categories": [
+        "RPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.85,
+        "total": 353,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 739630,
+      "name": "Phasmophobia",
+      "categories": [
+        "Casual",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.84,
+        "total": 706,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 246620,
+      "name": "Plague Inc: Evolved",
+      "categories": [
+        "Strategy",
+        "Sim"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 232750,
+      "name": "Planetary Annihilation",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 400,
+      "name": "Portal",
+      "categories": [
+        "Action"
+      ],
+      "proton": "native",
+      "notes": "Native.",
+      "anticheat": "none",
+      "engine": "Source",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 620,
+      "name": "Portal 2",
+      "categories": [
+        "Casual"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.88,
+        "total": 348,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 235320,
+      "name": "Primitive",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 233450,
+      "name": "Prison Architect",
+      "categories": [
+        "Sim",
+        "Strategy"
+      ],
+      "proton": "native",
+      "notes": "",
+      "anticheat": "none",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 224280,
+      "name": "Project Highrise",
+      "categories": [
+        "Sim"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 108600,
+      "name": "Project Zomboid",
+      "categories": [
+        "Survival",
+        "RPG"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.86,
+        "total": 298,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 10150,
+      "name": "Prototype",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 578080,
+      "name": "PUBG: BATTLEGROUNDS",
+      "categories": [
+        "FPS"
+      ],
+      "blocked": true,
+      "anticheat": "BattlEye",
+      "notes": "Anti-cheat blocks Linux/Proton by developer choice. Check ProtonDB before buying.",
+      "protondb": {
+        "tier": "borked",
+        "best": "platinum",
+        "trending": "borked",
+        "score": 0,
+        "total": 197,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1144200,
+      "name": "Ready or Not",
+      "categories": [
+        "FPS",
+        "Co-op"
+      ],
+      "anticheat": "EAC",
+      "runtimes": [
+        "EAC"
+      ],
+      "notes": "Needs the EAC runtime (installed automatically).",
+      "sysctl": {
+        "vm.max_map_count": "1048576"
+      },
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.8,
+        "total": 671,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1174180,
+      "name": "Red Dead Redemption 2",
+      "categories": [
+        "Action",
+        "RPG"
+      ],
+      "notes": "Large title; first launch shader compile is long. Use a recent GE-Proton.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.78,
+        "total": 1464,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1282100,
+      "name": "Remnant II",
+      "categories": [
+        "FPS",
+        "ARPG",
+        "Co-op"
+      ],
+      "sysctl": {
+        "vm.max_map_count": "1048576"
+      },
+      "notes": "Large UE5 title: a higher vm.max_map_count avoids crashes on older distro defaults.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.74,
+        "total": 227,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 617290,
+      "name": "Remnant: From the Ashes",
+      "categories": [
+        "FPS",
+        "ARPG",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.78,
+        "total": 159,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 287290,
+      "name": "Resident Evil 0 HD REMASTER",
+      "categories": [
+        "Action",
+        "Survival"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 883710,
+      "name": "Resident Evil 2",
+      "categories": [
+        "Action"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.86,
+        "total": 463,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 952060,
+      "name": "Resident Evil 3",
+      "categories": [
+        "Action",
+        "Survival"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 2050650,
+      "name": "Resident Evil 4",
+      "categories": [
+        "Action"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.74,
+        "total": 376,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 254700,
+      "name": "Resident Evil 4",
+      "categories": [
+        "Action",
+        "Survival"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 221040,
+      "name": "Resident Evil 4 (2005)",
+      "categories": [
+        "Action",
+        "Survival"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1196590,
+      "name": "Resident Evil Village",
+      "categories": [
+        "Action",
+        "FPS"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.73,
+        "total": 271,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 365960,
+      "name": "rFactor 2",
+      "categories": [
+        "Sim",
+        "Sports"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 294100,
+      "name": "RimWorld",
+      "categories": [
+        "Sim",
+        "Strategy"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.91,
+        "total": 223,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 248820,
+      "name": "Risk of Rain",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 632360,
+      "name": "Risk of Rain 2",
+      "categories": [
+        "Action",
+        "Co-op"
+      ],
+      "notes": "Solid. Multiplayer works.",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.9,
+        "total": 1152,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 386360,
+      "name": "Risk of Rain 2",
+      "categories": [
+        "Action",
+        "Co-op"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 252950,
+      "name": "Rocket League",
+      "categories": [
+        "Casual",
+        "Co-op"
+      ],
+      "notes": "Epic-owned; free-to-play via Steam. Runs well on recent Proton. Online matchmaking works for most players.",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.87,
+        "total": 874,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 221680,
+      "name": "Rocksmith 2014 Edition - Remastered",
+      "categories": [
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 241600,
+      "name": "Rogue Legacy",
+      "categories": [
+        "Action",
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 252490,
+      "name": "Rust",
+      "categories": [
+        "FPS",
+        "Survival",
+        "MMO"
+      ],
+      "anticheat": "EAC",
+      "runtimes": [
+        "EAC"
+      ],
+      "notes": "Needs the EAC runtime.",
+      "protondb": {
+        "tier": "silver",
+        "best": "platinum",
+        "trending": "silver",
+        "score": 0.32,
+        "total": 391,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1643320,
+      "name": "S.T.A.L.K.E.R. 2",
+      "categories": [
+        "FPS",
+        "RPG"
+      ],
+      "engine": "Unreal 5",
+      "sysctl": {
+        "vm.max_map_count": "1048576"
+      },
+      "notes": "UE5 shader-compile stutter. Needs a recent GE-Proton and an up-to-date Vulkan driver.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.82,
+        "total": 438,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 225640,
+      "name": "Sacred 3",
+      "categories": [
+        "Action",
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 526870,
+      "name": "Satisfactory",
+      "categories": [
+        "Sim",
+        "Survival",
+        "Co-op"
+      ],
+      "notes": "Runs well. Dedicated server support is separate (often native).",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.85,
+        "total": 1321,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 227560,
+      "name": "Scourge: Outbreak",
+      "categories": [
+        "FPS"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1172620,
+      "name": "Sea of Thieves",
+      "categories": [
+        "Co-op",
+        "Action"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.75,
+        "total": 793,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 517630,
+      "name": "Sea of Thieves",
+      "categories": [
+        "Action",
+        "Co-op"
+      ],
+      "proton": "ge",
+      "notes": "Xbox/Microsoft services.",
+      "anticheat": "custom"
+    },
+    {
+      "appid": 814380,
+      "name": "Sekiro: Shadows Die Twice",
+      "categories": [
+        "ARPG",
+        "Action"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.88,
+        "total": 527,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 2321470,
+      "name": "Senua's Saga: Hellblade II",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 233130,
+      "name": "Shadow Warrior",
+      "categories": [
+        "FPS",
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 234650,
+      "name": "Shadowrun Returns",
+      "categories": [
+        "RPG",
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 250760,
+      "name": "Shovel Knight: Treasure Trove",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 8930,
+      "name": "Sid Meier's Civilization V",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "native",
+      "notes": "Native Linux build.",
+      "anticheat": "none",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 289070,
+      "name": "Sid Meier's Civilization VI",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "native",
+      "notes": "Native Linux build.",
+      "anticheat": "none",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 2138710,
+      "name": "Sifu",
+      "categories": [
+        "Action"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.84,
+        "total": 87,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 2124490,
+      "name": "SILENT HILL 2",
+      "categories": [
+        "Action"
+      ],
+      "sysctl": {
+        "vm.max_map_count": "1048576"
+      },
+      "notes": "Large UE5 title: a higher vm.max_map_count avoids crashes on older distro defaults.",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.83,
+        "total": 163,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 228960,
+      "name": "Skullgirls",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 646570,
+      "name": "Slay the Spire",
+      "categories": [
+        "Strategy",
+        "Casual"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.95,
+        "total": 217,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 312660,
+      "name": "Sniper Elite 4",
+      "categories": [
+        "FPS",
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1029690,
+      "name": "Sniper Elite 5",
+      "categories": [
+        "FPS",
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1326470,
+      "name": "Sons Of The Forest",
+      "categories": [
+        "Survival",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.8,
+        "total": 287,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 244850,
+      "name": "Space Engineers",
+      "categories": [
+        "Sim",
+        "Survival"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 239350,
+      "name": "Spelunky",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1962660,
+      "name": "Split Fiction",
+      "categories": [
+        "Action",
+        "Co-op"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 996580,
+      "name": "Spyro Reignited Trilogy",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 393380,
+      "name": "Squad",
+      "categories": [
+        "FPS"
+      ],
+      "engine": "Unreal",
+      "anticheat": "EAC",
+      "runtimes": [
+        "EAC"
+      ],
+      "notes": "Needs the EAC runtime.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.62,
+        "total": 646,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 9900,
+      "name": "Star Trek Online",
+      "categories": [
+        "MMORPG",
+        "MMO"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.7,
+        "total": 212,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 6060,
+      "name": "Star Wars Battlefront II (Classic)",
+      "categories": [
+        "FPS"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1172380,
+      "name": "STAR WARS Jedi: Fallen Order",
+      "categories": [
+        "ARPG",
+        "Action"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.72,
+        "total": 612,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1774580,
+      "name": "STAR WARS Jedi: Survivor",
+      "categories": [
+        "ARPG",
+        "Action"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.68,
+        "total": 256,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1746580,
+      "name": "Star Wars Jedi: Survivor",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "EA App; GE-Proton.",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1222730,
+      "name": "STAR WARS: Squadrons",
+      "categories": [
+        "Action",
+        "Sim"
+      ],
+      "proton": "ge",
+      "notes": "EA App.",
+      "anticheat": "none"
+    },
+    {
+      "appid": 413150,
+      "name": "Stardew Valley",
+      "categories": [
+        "Casual",
+        "RPG",
+        "Co-op"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.96,
+        "total": 393,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1716740,
+      "name": "Starfield",
+      "categories": [
+        "RPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.62,
+        "total": 747,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 241100,
+      "name": "Steam Controller Configs",
+      "categories": [
+        "Casual"
+      ],
+      "proton": "native",
+      "notes": "",
+      "anticheat": "none",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 250820,
+      "name": "SteamVR",
+      "categories": [
+        "Casual"
+      ],
+      "proton": "native",
+      "notes": "SteamVR runtime.",
+      "anticheat": "none",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 281990,
+      "name": "Stellaris",
+      "categories": [
+        "Strategy",
+        "Sim"
+      ],
+      "proton": "native",
+      "notes": "Native Linux.",
+      "anticheat": "none",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 1449560,
+      "name": "Stray",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none",
+      "engine": "Unreal Engine"
+    },
+    {
+      "appid": 1364780,
+      "name": "Street Fighter 6",
+      "categories": [
+        "Action"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.74,
+        "total": 298,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 264710,
+      "name": "Subnautica",
+      "categories": [
+        "Survival"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.84,
+        "total": 649,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 578650,
+      "name": "Subnautica",
+      "categories": [
+        "Survival",
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none",
+      "engine": "Unity"
+    },
+    {
+      "appid": 848450,
+      "name": "Subnautica: Below Zero",
+      "categories": [
+        "Survival",
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none",
+      "engine": "Unity"
+    },
+    {
+      "appid": 221640,
+      "name": "Super Hexagon",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 233720,
+      "name": "Surgeon Simulator",
+      "categories": [
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 286160,
+      "name": "Tabletop Simulator",
+      "categories": [
+        "Casual",
+        "Strategy",
+        "Co-op"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none",
+      "engine": "Unity"
+    },
+    {
+      "appid": 236510,
+      "name": "Takedown: Red Sabre",
+      "categories": [
+        "FPS"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 440,
+      "name": "Team Fortress 2",
+      "categories": [
+        "FPS"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.78,
+        "total": 697,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 389730,
+      "name": "TEKKEN 7",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1778820,
+      "name": "TEKKEN 8",
+      "categories": [
+        "Action"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.69,
+        "total": 233,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 234390,
+      "name": "Teleglitch: Die More Edition",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 105600,
+      "name": "Terraria",
+      "categories": [
+        "Casual",
+        "Survival",
+        "Co-op"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.83,
+        "total": 491,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 261760,
+      "name": "Terrorhedron",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 250340,
+      "name": "The Binding of Isaac",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 250900,
+      "name": "The Binding of Isaac: Rebirth",
+      "categories": [
+        "Action",
+        "RPG"
+      ],
+      "proton": "native",
+      "notes": "Native/Proton both used.",
+      "anticheat": "none",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 261030,
+      "name": "The Black Watchmen",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 231160,
+      "name": "The Darkness II",
+      "categories": [
+        "FPS",
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 22330,
+      "name": "The Elder Scrolls IV: Oblivion",
+      "categories": [
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 306130,
+      "name": "The Elder Scrolls Online",
+      "categories": [
+        "MMORPG",
+        "RPG"
+      ],
+      "notes": "Works well on Proton.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.8,
+        "total": 847,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 72850,
+      "name": "The Elder Scrolls V: Skyrim",
+      "categories": [
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "Legendary/original edition.",
+      "anticheat": "none"
+    },
+    {
+      "appid": 489830,
+      "name": "The Elder Scrolls V: Skyrim Special Edition",
+      "categories": [
+        "RPG"
+      ],
+      "notes": "Classic. Script Extender (SKSE) users should prefer a current GE-Proton and check load order tools.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.81,
+        "total": 1002,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 2073850,
+      "name": "THE FINALS",
+      "categories": [
+        "FPS"
+      ],
+      "engine": "Unreal 5",
+      "anticheat": "EAC",
+      "runtimes": [
+        "EAC"
+      ],
+      "notes": "Needs the EAC runtime.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.66,
+        "total": 1686,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 242760,
+      "name": "The Forest",
+      "categories": [
+        "Survival",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.82,
+        "total": 455,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1888930,
+      "name": "The Last of Us Part I",
+      "categories": [
+        "Action"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.73,
+        "total": 355,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 2531310,
+      "name": "The Last of Us Part II Remastered",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 647830,
+      "name": "The Outer Worlds",
+      "categories": [
+        "RPG",
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 288160,
+      "name": "The Room",
+      "categories": [
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1222670,
+      "name": "The Sims 4",
+      "categories": [
+        "Sim"
+      ],
+      "proton": "ge",
+      "notes": "EA App.",
+      "anticheat": "none"
+    },
+    {
+      "appid": 257510,
+      "name": "The Talos Principle",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 258520,
+      "name": "The Vanishing of Ethan Carter",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 20920,
+      "name": "The Witcher 2: Assassins of Kings Enhanced Edition",
+      "categories": [
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 292030,
+      "name": "The Witcher 3: Wild Hunt",
+      "categories": [
+        "RPG",
+        "ARPG"
+      ],
+      "notes": "Generally excellent on GE-Proton. Use DX12 or Vulkan depending on GPU; let shaders compile on first run.",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.87,
+        "total": 1870,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 20900,
+      "name": "The Witcher: Enhanced Edition",
+      "categories": [
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 282070,
+      "name": "This War of Mine",
+      "categories": [
+        "Survival",
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 2429640,
+      "name": "Throne and Liberty",
+      "categories": [
+        "MMORPG",
+        "RPG"
+      ],
+      "anticheat": "EAC",
+      "runtimes": [
+        "EAC"
+      ],
+      "notes": "Needs the EAC runtime. Reports vary by patch; check ProtonDB.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.69,
+        "total": 187,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 475150,
+      "name": "Titan Quest Anniversary Edition",
+      "categories": [
+        "ARPG",
+        "RPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.83,
+        "total": 230,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1237970,
+      "name": "Titanfall 2",
+      "categories": [
+        "FPS"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.76,
+        "total": 821,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 359550,
+      "name": "Tom Clancy's Rainbow Six Siege",
+      "categories": [
+        "FPS"
+      ],
+      "blocked": true,
+      "anticheat": "BattlEye",
+      "notes": "Anti-cheat blocks Linux/Proton by developer choice. Check ProtonDB before buying.",
+      "protondb": {
+        "tier": "borked",
+        "best": "platinum",
+        "trending": "bronze",
+        "score": 0.08,
+        "total": 312,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 235600,
+      "name": "Tom Clancy's The Division",
+      "categories": [
+        "Action",
+        "FPS",
+        "MMO"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 200710,
+      "name": "Torchlight II",
+      "categories": [
+        "ARPG",
+        "RPG",
+        "Co-op"
+      ],
+      "proton": "native",
+      "launch_options": "%command%",
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.82,
+        "total": 65,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1974050,
+      "name": "Torchlight: Infinite",
+      "categories": [
+        "ARPG",
+        "RPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.73,
+        "total": 28,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 248570,
+      "name": "Toribash",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 214950,
+      "name": "Total War: ROME II - Emperor Edition",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 34330,
+      "name": "Total War: SHOGUN 2",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 779340,
+      "name": "Total War: THREE KINGDOMS",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 470220,
+      "name": "Total War: WARHAMMER",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 594570,
+      "name": "Total War: WARHAMMER II",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1142710,
+      "name": "Total War: WARHAMMER III",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 508440,
+      "name": "Totally Accurate Battle Simulator",
+      "categories": [
+        "Strategy",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none",
+      "engine": "Unity"
+    },
+    {
+      "appid": 221020,
+      "name": "Towns",
+      "categories": [
+        "Sim",
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 245620,
+      "name": "Tropico 5",
+      "categories": [
+        "Sim",
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 263760,
+      "name": "Turbo Dismount",
+      "categories": [
+        "Casual",
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 262060,
+      "name": "Turbo Pug",
+      "categories": [
+        "Action",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1659420,
+      "name": "UNCHARTED: Legacy of Thieves Collection",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 304930,
+      "name": "Unturned",
+      "categories": [
+        "Survival",
+        "Action"
+      ],
+      "proton": "native",
+      "notes": "Native Linux.",
+      "anticheat": "none",
+      "engine": "Unity",
+      "launch_options": "%command%"
+    },
+    {
+      "appid": 1604030,
+      "name": "V Rising",
+      "categories": [
+        "Survival",
+        "ARPG",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.7,
+        "total": 359,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 892970,
+      "name": "Valheim",
+      "categories": [
+        "Survival",
+        "Co-op",
+        "RPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.93,
+        "total": 350,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1794680,
+      "name": "Vampire Survivors",
+      "categories": [
+        "Casual",
+        "Action"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "platinum",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.84,
+        "total": 597,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 246900,
+      "name": "Viscera Cleanup Detail",
+      "categories": [
+        "Casual",
+        "Sim"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 438100,
+      "name": "VRChat",
+      "categories": [
+        "Casual",
+        "MMO"
+      ],
+      "proton": "ge",
+      "notes": "VR/desktop; anti-cheat/plugins vary.",
+      "anticheat": "custom",
+      "engine": "Unity"
+    },
+    {
+      "appid": 431960,
+      "name": "Wallpaper Engine",
+      "categories": [
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "Works on Proton with some compositor caveats.",
+      "anticheat": "none"
+    },
+    {
+      "appid": 230190,
+      "name": "War for the Overworld",
+      "categories": [
+        "Strategy",
+        "Sim"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 234940,
+      "name": "War of the Roses",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 236390,
+      "name": "War Thunder",
+      "categories": [
+        "Sim",
+        "FPS",
+        "MMO"
+      ],
+      "notes": "Native Linux client available. Prefer the native build over Proton.",
+      "proton": "native",
+      "launch_options": "%command%",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.7,
+        "total": 539,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 230410,
+      "name": "Warframe",
+      "categories": [
+        "FPS",
+        "MMO",
+        "Co-op"
+      ],
+      "notes": "Launcher and game both work on current GE-Proton. Keep GPU drivers current.",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.82,
+        "total": 1644,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1361210,
+      "name": "Warhammer 40,000: Darktide",
+      "categories": [
+        "FPS",
+        "Co-op"
+      ],
+      "anticheat": "EAC",
+      "runtimes": [
+        "EAC"
+      ],
+      "notes": "Needs the EAC runtime (installed automatically).",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.74,
+        "total": 629,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 2369390,
+      "name": "Warhammer 40,000: Rogue Trader",
+      "categories": [
+        "RPG",
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 2072450,
+      "name": "Warhammer 40,000: Space Marine 2",
+      "categories": [
+        "Action",
+        "FPS",
+        "Co-op"
+      ],
+      "proton": "ge",
+      "notes": "EAC for multiplayer.",
+      "anticheat": "EAC",
+      "runtimes": [
+        "EAC"
+      ]
+    },
+    {
+      "appid": 235540,
+      "name": "Warhammer: End Times - Vermintide",
+      "categories": [
+        "Action",
+        "FPS",
+        "Co-op"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 552500,
+      "name": "Warhammer: Vermintide 2",
+      "categories": [
+        "FPS",
+        "ARPG",
+        "Co-op"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "silver",
+        "best": "platinum",
+        "trending": "gold",
+        "score": 0.54,
+        "total": 485,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 243470,
+      "name": "Watch_Dogs",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1448440,
+      "name": "Wo Long: Fallen Dynasty",
+      "categories": [
+        "ARPG"
+      ],
+      "notes": "",
+      "protondb": {
+        "tier": "gold",
+        "best": "platinum",
+        "trending": "platinum",
+        "score": 0.58,
+        "total": 35,
+        "fetched": "2026-10-14"
+      }
+    },
+    {
+      "appid": 1407200,
+      "name": "World of Tanks",
+      "categories": [
+        "Action",
+        "Sim"
+      ],
+      "proton": "ge",
+      "notes": "Wargaming launcher; online services vary on Proton.",
+      "anticheat": "custom"
+    },
+    {
+      "appid": 552990,
+      "name": "World of Warships",
+      "categories": [
+        "Action",
+        "Sim"
+      ],
+      "proton": "ge",
+      "notes": "Wargaming client.",
+      "anticheat": "none"
+    },
+    {
+      "appid": 228380,
+      "name": "Wreckfest",
+      "categories": [
+        "Sports",
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 268500,
+      "name": "XCOM 2",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 200510,
+      "name": "XCOM: Enemy Unknown",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 223830,
+      "name": "Xenonauts",
+      "categories": [
+        "Strategy"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 270550,
+      "name": "Yet Another Zombie Defense",
+      "categories": [
+        "Action"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 227580,
+      "name": "Youtubers Life",
+      "categories": [
+        "Sim"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none"
+    },
+    {
+      "appid": 1449850,
+      "name": "Yu-Gi-Oh! Master Duel",
+      "categories": [
+        "Strategy",
+        "Casual"
+      ],
+      "proton": "ge",
+      "notes": "",
+      "anticheat": "none",
+      "engine": "Unity"
+    },
+    {
+      "appid": 2467010,
+      "name": "Zenless Zone Zero",
+      "categories": [
+        "Action",
+        "RPG"
+      ],
+      "proton": "ge",
+      "notes": "HoYoverse; launcher/anti-cheat can be fussy.",
+      "anticheat": "custom"
+    }
+  ],
+  "source": "https://www.protondb.com"
+}

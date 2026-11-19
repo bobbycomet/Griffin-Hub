@@ -1,0 +1,21 @@
+[Unit]
+Description=Kernel Autotune v2.4.0
+# sysinit.target: modprobe needs a working module filesystem
+# swap.target: avoid racing fstab swap activation, and run after any
+#   distro zram setup (zram-generator, zram-tools, ...) so we see its devices
+# systemd-modules-load/systemd-sysctl: our sysctl values must land after the
+#   distro's own, not be overwritten by them
+After=local-fs.target sysinit.target swap.target systemd-modules-load.service systemd-sysctl.service
+Before=systemd-user-sessions.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/kernel-autotune apply
+RemainAfterExit=yes
+# A generous but finite timeout so a hung swapon cannot stall boot forever
+TimeoutStartSec=120
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

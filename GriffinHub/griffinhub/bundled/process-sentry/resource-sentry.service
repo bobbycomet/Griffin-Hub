@@ -1,0 +1,18 @@
+[Unit]
+Description=Process Sentry v3
+# Start after kernel-autotune so state.json (distro/kernel/device facts and
+# what was actually applied) is fresh. Ordering only: no Wants=, so sentry
+# works fine on systems where kernel-autotune isn't installed.
+After=network.target kernel-autotune.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/env python3 /usr/local/bin/sentryv3.py
+Restart=always
+RestartSec=5
+# Exit 78 = a required Python module (yaml/psutil) is missing, or another
+# instance is running; retrying can't fix that, so don't loop.
+RestartPreventExitStatus=78
+
+[Install]
+WantedBy=multi-user.target
