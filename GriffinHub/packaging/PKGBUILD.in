@@ -1,0 +1,35 @@
+# Maintainer: @MAINTAINER@
+pkgname=griffinhub
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="@SUMMARY@"
+arch=('any')
+url="@HOMEPAGE@"
+# TODO: the sources declare no license - set the real one (e.g. 'GPL3', 'MIT') and ship its text.
+license=('custom')
+depends=('python>=3.10' 'python-pyqt6' 'python-requests' 'polkit')
+optdepends=('winetricks: Game Tweaks (it also downloads its own verified copy)'
+            'cabextract: Game Tweaks winetricks verbs'
+            'dkms: build out-of-tree controller / WiFi drivers'
+            'linux-headers: DKMS builds (use the headers matching your kernel)'
+            'python-psutil: Process Sentry'
+            'python-yaml: Process Sentry configuration'
+            'bubblewrap: plugin sandbox'
+            'gamemode: game performance mode'
+            'mangohud: performance overlay')
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('@SHA256@')
+
+package() {
+  cd "$srcdir/$pkgname-$pkgver"
+  install -d "$pkgdir/usr/lib/griffinhub"
+  cp -a griffinhub.py griffinhub.png griffinhub-56.png griffinhub griffin "$pkgdir/usr/lib/griffinhub/"
+  find "$pkgdir" -name __pycache__ -prune -exec rm -rf {} +
+  install -Dm755 packaging/griffinhub.sh "$pkgdir/usr/bin/griffinhub"
+  install -Dm644 packaging/griffinhub.desktop "$pkgdir/usr/share/applications/griffinhub.desktop"
+  install -Dm644 griffinhub.png "$pkgdir/usr/share/pixmaps/griffinhub.png"
+  if [ -d packaging/icons/hicolor ]; then
+    install -d "$pkgdir/usr/share/icons"
+    cp -a packaging/icons/hicolor "$pkgdir/usr/share/icons/"
+  fi
+}

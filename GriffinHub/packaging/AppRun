@@ -1,0 +1,29 @@
+#!/bin/sh
+# Griffin Hub AppImage entry point.
+HERE="$(dirname "$(readlink -f "$0")")"
+export APPDIR="${APPDIR:-$HERE}"
+export GH_APPRUN=1
+
+# Bundled libraries (xcb helpers for Qt) -- the original value is restored for child
+# processes by griffinhub.py (gt_restore_child_env) once Qt has started.
+export GH_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+# Python: bundled interpreter, app sources next to it; ignore the host's Python settings.
+unset PYTHONHOME PYTHONSTARTUP PYTHONSAFEPATH
+export PYTHONPATH="$HERE/usr/src"
+export PYTHONNOUSERSITE=1
+export PYTHONDONTWRITEBYTECODE=1     # the AppImage is read-only; pycs are precompiled
+
+# Qt: use the plugins shipped with the bundled PyQt6, never the host's.
+unset QT_PLUGIN_PATH QT_QPA_PLATFORM_PLUGIN_PATH
+
+# CA certificates for HTTPS (the bundled Python looks in the Debian location only).
+if [ -z "${SSL_CERT_FILE:-}" ]; then
+  for f in /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt \
+           /etc/ssl/ca-bundle.pem /etc/ssl/cert.pem /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem; do
+    if [ -r "$f" ]; then export SSL_CERT_FILE="$f"; export GH_SET_SSL_CERT_FILE=1; break; fi
+  done
+fi
+
+exec "$HERE/usr/python/bin/python3" "$HERE/usr/src/griffinhub.py" "$@"

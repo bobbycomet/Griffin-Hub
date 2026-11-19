@@ -1,0 +1,2 @@
+#!/bin/bash
+echo "runuser $*" >> /tmp/fs/log/calls.log; while [ "$1" != -- ]; do shift; done; shift; exec "$@"

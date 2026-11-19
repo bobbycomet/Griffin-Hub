@@ -1,0 +1,10 @@
+# Pinned versions used for the AppImage (only PyQt6 is needed; everything else is the Python stdlib)
+PyQt6==6.11.0
+PyQt6-Qt6==6.11.2
+PyQt6-sip==13.13.0
+# Griffin Game Tweaks (a sub-tab of Griffin Play) needs requests
+requests==2.34.2
+urllib3==2.8.0
+certifi==2026.10.23
+idna==3.20
+charset-normalizer==3.5.2

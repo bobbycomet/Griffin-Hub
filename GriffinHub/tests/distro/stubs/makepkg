@@ -1,0 +1,2 @@
+#!/bin/bash
+echo "makepkg HOME=$HOME $*" >> /tmp/fs/log/calls.log; touch x-1-1-any.pkg.tar.zst x-debug-1-1-any.pkg.tar.zst; [ -n "$MAKEPKG_FAIL" ] && exit 1; exit 0

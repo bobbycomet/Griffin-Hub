@@ -1,0 +1,12 @@
+#!/bin/bash
+echo "pacman $*" >> /tmp/fs/log/calls.log
+case "pacman:$1:$2" in
+ pacman:-Si:*) case "$2" in aur-only-dep) exit 1;; nvidia-580xx|steam-devices|vulkan-nouveau|libva-nvidia-driver|r8168-dkms|r8168|broadcom-wl-dkms) [ -n "$GH_HAVE_AUR_ONLY" ] && exit 1; exit 0;; *) exit 0;; esac;;
+ pacman:-Q:*) exit ${PQ_RC:-1};;
+ pacman:-Qq:*) printf 'nvidia-dkms\nnvidia-utils\nlib32-nvidia-utils\nlinux\n';;
+ mokutil:--sb-state:*) [ -n "$SB" ] && echo 'SecureBoot enabled' || echo 'SecureBoot disabled'; exit 0;;
+ dnf:-q:repoquery) [ -n "$DNF_MISSING" ] && [ "$3" = "$DNF_MISSING" ] && exit 0; echo "$3"; exit 0;;
+ zypper:--non-interactive:info) [ -n "$ZY_MISSING" ] && [ "$3" = "$ZY_MISSING" ] && exit 104; exit 0;;
+ zypper:--non-interactive:lr) [ -n "$HAVE_NV_REPO" ] && echo 'NVIDIA | https://download.nvidia.com/x'; exit 0;;
+esac
+exit 0

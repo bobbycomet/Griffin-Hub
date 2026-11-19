@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "apt-cache $*" >> /tmp/fs/log/calls.log
+if [ "$1" = policy ]; then for m in $AC_MISSING; do [ "$2" = "$m" ] && exit 0; done; echo "  Candidate: 1.0"; fi; exit 0

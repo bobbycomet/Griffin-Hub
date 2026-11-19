@@ -1,0 +1,61 @@
+%global debug_package %{nil}
+%global __brp_python_bytecompile %{nil}
+# resource-sentry.openrc starts with #!/sbin/openrc-run (for OpenRC distros); do not turn that into an RPM dependency
+%global __requires_exclude ^/sbin/openrc-run$
+
+Name:           griffinhub
+Version:        @VERSION@
+Release:        1
+Summary:        @SUMMARY@
+# TODO: the sources declare no license - set the real SPDX id before public distribution.
+License:        @LICENSE@
+URL:            @HOMEPAGE@
+Source0:        %{name}-%{version}.tar.gz
+BuildArch:      noarch
+Requires:       python3 >= 3.10
+Requires:       (python3-pyqt6 or python3-qt6 or python3-PyQt6)
+Requires:       python3-requests
+Requires:       polkit
+Recommends:     python3-psutil
+Recommends:     (python3-pyyaml or python3-PyYAML)
+Recommends:     dkms
+Suggests:       winetricks
+Recommends:     cabextract
+Suggests:       bubblewrap
+
+%description
+@DESCRIPTION@
+
+%prep
+%setup -q
+
+%build
+
+%install
+mkdir -p %{buildroot}/usr/lib/griffinhub
+cp -a griffinhub.py griffinhub.png griffinhub-56.png griffinhub griffin %{buildroot}/usr/lib/griffinhub/
+find %{buildroot} -name __pycache__ -prune -exec rm -rf {} +
+install -Dm755 packaging/griffinhub.sh %{buildroot}/usr/bin/griffinhub
+install -Dm644 packaging/griffinhub.desktop %{buildroot}/usr/share/applications/griffinhub.desktop
+install -Dm644 griffinhub.png %{buildroot}/usr/share/pixmaps/griffinhub.png
+if [ -d packaging/icons/hicolor ]; then
+  mkdir -p %{buildroot}/usr/share/icons
+  cp -a packaging/icons/hicolor %{buildroot}/usr/share/icons/
+fi
+
+%post
+python3 -m compileall -q /usr/lib/griffinhub >/dev/null 2>&1 || :
+
+%postun
+if [ "$1" -eq 0 ]; then rm -rf /usr/lib/griffinhub || :; fi
+
+%files
+/usr/lib/griffinhub
+/usr/bin/griffinhub
+/usr/share/applications/griffinhub.desktop
+/usr/share/pixmaps/griffinhub.png
+/usr/share/icons/hicolor/*/apps/griffinhub.png
+
+%changelog
+* Wed Oct 28 2026 Bobby Comet <bobbycomet@users.noreply.github.com> - @VERSION@-1
+- Griffin Game Tweaks as a sub-tab of Griffin Play; new griffin icons; distro modules (apt, pacman, dnf, zypper); plugin API v2

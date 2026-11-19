@@ -1,0 +1,2 @@
+#!/bin/bash
+case "$1" in -r) echo ${KVER:-6.12.1-1-default};; *) echo Linux;; esac

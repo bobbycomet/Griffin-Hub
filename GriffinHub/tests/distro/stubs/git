@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "git $*" >> /tmp/fs/log/calls.log
+if [ "$1" = clone ]; then d=${@: -1}; mkdir -p "$d"; case "$*" in *aur.archlinux.org*) true;; *) false;; esac && { printf 'pkgname=x\n' > "$d/PKGBUILD"; printf 'pkgbase = x\n\tdepends = dkms\n\tmakedepends = git\n\tdepends = aur-only-dep>=1\n' > "$d/.SRCINFO"; } || { printf '#!/bin/sh\necho "install.sh $PWD $*" >> /tmp/fs/log/calls.log\n' > "$d/install.sh"; printf 'PACKAGE_NAME="mydrv"\nPACKAGE_VERSION="1.2.3"\n' > "$d/dkms.conf"; }; fi; exit 0

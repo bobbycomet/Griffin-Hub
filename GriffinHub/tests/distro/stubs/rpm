@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "rpm $*" >> /tmp/fs/log/calls.log
+case "$1" in -E) echo 42;; -q) exit ${RPM_Q_RC:-1};; esac; exit 0

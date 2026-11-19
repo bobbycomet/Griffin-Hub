@@ -1,0 +1,2 @@
+#!/bin/bash
+echo 'nvidia-driver-580 install ok installed'

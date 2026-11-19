@@ -1,0 +1,2 @@
+#!/bin/bash
+case "$1" in --print-architecture) echo amd64;; *) echo 'ii  libnvidia-encode-580 x';; esac

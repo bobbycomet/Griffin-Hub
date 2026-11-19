@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Griffin Hub
+GenericName=System Tuning & Hardware Hub
+Comment=Tune Linux for gaming: kernel, drivers, controllers, WiFi fixes and Steam/Proton fixes
+Exec=griffinhub
+Icon=griffinhub
+Terminal=false
+Categories=Settings;HardwareSettings;
+Keywords=Linux;gaming;tuning;drivers;NVIDIA;AMD;controller;Xbox;Proton;Steam;WiFi;kernel;
+StartupNotify=true
+StartupWMClass=Griffin Hub
