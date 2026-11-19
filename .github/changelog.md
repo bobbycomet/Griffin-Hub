@@ -1,3 +1,5 @@
+## Bumped the version to 2.0.0 and added a wiki. What was planned as 1.1.0 is now 2.0, so all features are listed below.
+
 ## Griffin Hub 1.1.0 is being worked on. What to expect: Griffin Play, this is a feature being added. What was originally going to be a standalone tool, will now be included in Griffin Hub. Griffin Play is essentially a ProtonDB tool (no affiliation). Branding image will also change to have the Grix mascot for better brand cohesion.
 
 ### How it works: 
