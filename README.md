@@ -58,11 +58,21 @@ Griffin Hub is organized around two main areas, plus a Plugins page and Settings
 All of it is styled consistently: one card component, one badge component, one button style,
 so nothing feels bolted on, regardless of which daemon or subsystem a given screen is talking to.
 
-<img width="1920" height="1080" alt="Screenshot_20260705_101840" src="https://github.com/user-attachments/assets/025b8563-7b60-48be-9afc-0928038163a1" />
-<img width="1920" height="1080" alt="Screenshot_20260705_120014" src="https://github.com/user-attachments/assets/bf053956-bec7-4b2c-a1eb-25786b8137e0" />
-<img width="1920" height="1080" alt="Screenshot_20260705_120027" src="https://github.com/user-attachments/assets/b8f4553f-840d-4a97-b68c-36c8196730de" />
-<img width="1920" height="1080" alt="Screenshot_20260705_120108" src="https://github.com/user-attachments/assets/2ba1f89d-9578-4d37-aa64-cb65e9463ffd" />
-<img width="1920" height="1080" alt="Screenshot_20260705_120102" src="https://github.com/user-attachments/assets/d7fdb5e7-88e7-43f5-85e6-e85b21d4a3db" />
+<img width="1920" height="1080" alt="Screenshot_20261119_112318" src="https://github.com/user-attachments/assets/4b28f462-ca30-403b-9451-cf2ec05e2ee7" />
+<img width="1920" height="1080" alt="Screenshot_20261119_112311" src="https://github.com/user-attachments/assets/f257bc1c-e1b1-446a-9dec-213aacc00cfc" />
+<img width="1920" height="1080" alt="Screenshot_20261119_112303" src="https://github.com/user-attachments/assets/7210505d-15b3-440d-bd53-d40dc8c32267" />
+<img width="1920" height="1080" alt="Screenshot_20261119_112256" src="https://github.com/user-attachments/assets/3b7aaf5a-a64a-43b8-ae8b-231e03bd86b9" />
+<img width="1920" height="1080" alt="Screenshot_20261119_112248" src="https://github.com/user-attachments/assets/b048366b-09f3-496e-8562-d6ad65928910" />
+<img width="1920" height="1080" alt="Screenshot_20261119_112241" src="https://github.com/user-attachments/assets/947fb4a3-966b-46b3-915f-9662ee6155b9" />
+<img width="1920" height="1080" alt="Screenshot_20261119_112231" src="https://github.com/user-attachments/assets/abb2008a-a71b-4ff7-8916-85282bea44af" />
+<img width="1920" height="1080" alt="Screenshot_20261119_112223" src="https://github.com/user-attachments/assets/70160102-ec07-404c-ba9c-c5bf5a87b7b4" />
+<img width="1920" height="1080" alt="Screenshot_20261119_112215" src="https://github.com/user-attachments/assets/17d1df2f-ce66-414e-ace0-3584f03f4e3c" />
+<img width="1920" height="1080" alt="Screenshot_20261119_112158" src="https://github.com/user-attachments/assets/c7b9f56d-6bc6-469f-ba3d-b959483ff8a2" />
+<img width="1920" height="1080" alt="Screenshot_20261119_112149" src="https://github.com/user-attachments/assets/c11cd481-ecb9-4ea0-bb61-5c9a2c6806a9" />
+<img width="1920" height="1080" alt="Screenshot_20261119_112138" src="https://github.com/user-attachments/assets/6ab851a2-17a7-4076-bae6-3978aa789a2c" />
+<img width="1920" height="1080" alt="Screenshot_20261119_112129" src="https://github.com/user-attachments/assets/4f9bb4db-2693-4c57-a2f8-81f642144d10" />
+<img width="1920" height="1080" alt="Screenshot_20261119_112114" src="https://github.com/user-attachments/assets/1b711709-959c-4d40-b705-2a90911ed973" />
+
 
 
 ---
