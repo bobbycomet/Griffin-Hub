@@ -6,7 +6,7 @@
 
 **A PyQt6 desktop app for tuning your Linux system and managing your hardware — built to be extended.**
 
-Version 2.0.0 · Linux (Ubuntu/Debian-focused, KDE Plasma friendly) · Python 3 + PyQt6
+Version 2.0.0 release · Linux (Ubuntu/Debian-focused, KDE Plasma friendly) · Python 3 + PyQt6
 
 Development updates will be in the [changelog](https://github.com/bobbycomet/Griffin-Hub/blob/main/.github/changelog.md)
 
